@@ -1,0 +1,91 @@
+package com.demetrius.tribunal.order.interfaces.controller;
+
+import com.demetrius.tribunal.order.application.dto.OrderCreateCommand;
+import com.demetrius.tribunal.order.application.dto.OrderResult;
+import com.demetrius.tribunal.order.application.dto.OrderReviewCommand;
+import com.demetrius.tribunal.order.application.service.OrderApplicationService;
+import com.demetrius.tribunal.order.application.service.OrderReviewApplicationService;
+import com.demetrius.tribunal.order.interfaces.dto.OrderCreateRequest;
+import com.demetrius.tribunal.order.interfaces.dto.OrderReviewRequest;
+import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+/**
+ * 订单接口层（REST 控制器）。
+ *
+ * <p>对照旧项目：{@code OrderController} / {@code SalesmanController}。</p>
+ *
+ * <p>接口层职责（最薄）：</p>
+ * <ol>
+ *   <li>接收 HTTP 请求与参数校验（@Valid）</li>
+ *   <li>接口 DTO → 应用层 Command 的转换</li>
+ *   <li>返回应用层结果</li>
+ * </ol>
+ * <p>接口层不包含业务规则、不直接触碰领域对象/仓储。</p>
+ *
+ * <p>TODO（学习任务）：</p>
+ * <ul>
+ *   <li>统一响应体封装（对照旧项目 BaseResponse / DataResponse / ErrorCode）</li>
+ *   <li>全局异常处理（@RestControllerAdvice，对照旧项目 ExceptionCast / 异常拦截）</li>
+ *   <li>操作日志注解（对照旧项目 @OperateLog）</li>
+ *   <li>防重复提交注解（对照旧项目 @NoRepeatCommit，里程碑 4）</li>
+ *   <li>分页查询接口（对照旧项目 PageInfo + pagehelper）</li>
+ * </ul>
+ */
+@RestController
+@RequestMapping("/api/orders")
+public class OrderController {
+
+    private final OrderApplicationService orderApplicationService;
+
+    private final OrderReviewApplicationService reviewApplicationService;
+
+    public OrderController(OrderApplicationService orderApplicationService,
+                           OrderReviewApplicationService reviewApplicationService) {
+        this.orderApplicationService = orderApplicationService;
+        this.reviewApplicationService = reviewApplicationService;
+    }
+
+    /**
+     * 下单：POST /api/orders
+     */
+    @PostMapping
+    public OrderResult create(@Valid @RequestBody OrderCreateRequest request) {
+        OrderCreateCommand command = new OrderCreateCommand(
+                request.customerId(),
+                request.skus().stream()
+                        .map(s -> new OrderCreateCommand.SkuItem(
+                                s.skuCode(), s.skuName(), s.quantity(), s.price()))
+                        .toList());
+        return orderApplicationService.createOrder(command);
+    }
+
+    /**
+     * 查询订单：GET /api/orders/{orderId}
+     */
+    @GetMapping("/{orderId}")
+    public OrderResult get(@PathVariable String orderId) {
+        return orderApplicationService.getOrder(orderId);
+    }
+
+    /**
+     * 审单：POST /api/orders/{orderId}/review
+     */
+    @PostMapping("/{orderId}/review")
+    public OrderResult review(@PathVariable String orderId,
+                              @Valid @RequestBody OrderReviewRequest request) {
+        OrderReviewCommand command = new OrderReviewCommand(
+                orderId, request.approved(), request.reason(), request.operator());
+        return reviewApplicationService.review(command);
+    }
+
+    /**
+     * 心跳接口（对照旧项目 api/order/heartbeat，用于运维探活）。
+     */
+    @GetMapping("/heartbeat")
+    public Map<String, String> heartbeat() {
+        return Map.of("status", "UP");
+    }
+}

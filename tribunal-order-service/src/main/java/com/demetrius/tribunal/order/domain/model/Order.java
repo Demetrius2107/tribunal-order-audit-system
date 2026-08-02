@@ -1,0 +1,184 @@
+package com.demetrius.tribunal.order.domain.model;
+
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * 订单聚合根（★核心类）。
+ *
+ * <p>对照旧项目：{@code OrderServiceImpl}（14102 行的类）、{@code OrderDomain}。</p>
+ *
+ * <p>聚合根是 DDD 的核心：所有对订单的修改必须经过聚合根的方法，
+ * 业务规则（状态机校验、金额校验）内聚在聚合内部，而不是散落在 Service 里。</p>
+ *
+ * <p>TODO（学习任务）——对照旧项目 {@code saveFinalOrder} / {@code generateFinalOrder} /
+ * {@code stateOfChange} 逐一补齐：</p>
+ * <ul>
+ *   <li>创建时校验：明细不能为空、金额不能为负、客户必须存在（需要 CustomerRepository，注意不要在领域层注入仓储——通过领域服务/应用层编排）</li>
+ *   <li>金额计算：总金额 = Σ明细金额；折扣、押金、税、运费如何参与（对照促销计算）</li>
+ *   <li>信用校验：审单前校验客户信用额度（对照 creditProcessing / checkTheAmountPayable）</li>
+ *   <li>操作日志 / 状态流水：每次状态迁移写 order_status_record（对照 saveOrderStatusProcessRecordDomain）</li>
+ *   <li>幂等：同一订单重复提交/重复状态回传的处理（对照 confirmationOfStatus）</li>
+ * </ul>
+ */
+public class Order {
+
+    private final OrderId id;
+
+    /** 订单编号（业务唯一键，数据库唯一约束 → 幂等第一道防线） */
+    private final String orderNo;
+
+    private final String customerId;
+
+    private OrderStatus status;
+
+    /** 订单明细（聚合内实体） */
+    private final List<OrderSku> skus;
+
+    private BigDecimal totalAmount;
+
+    private BigDecimal discountAmount;
+
+    private BigDecimal payableAmount;
+
+    /** 拒绝原因（审单拒绝时记录，对照旧项目 refuseToReason） */
+    private String rejectReason;
+
+    private LocalDateTime createTime;
+
+    private LocalDateTime updateTime;
+
+    private Order(OrderId id, String orderNo, String customerId, List<OrderSku> skus) {
+        this.id = id;
+        this.orderNo = orderNo;
+        this.customerId = customerId;
+        this.skus = skus;
+        this.status = OrderStatus.TO_BE_CONFIRMED;
+        this.createTime = LocalDateTime.now();
+        this.updateTime = this.createTime;
+        // TODO（学习任务）：初始化金额计算（可抽取到 OrderAmountCalculator 领域服务）
+        this.totalAmount = skus.stream()
+                .map(OrderSku::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.discountAmount = BigDecimal.ZERO;
+        this.payableAmount = this.totalAmount;
+    }
+
+    /**
+     * 工厂方法：创建订单（初始状态 = 待确认）。
+     *
+     * @param id         订单 ID
+     * @param orderNo    订单编号
+     * @param customerId 客户 ID
+     * @param skus       订单明细
+     * @return 新订单聚合
+     */
+    public static Order create(OrderId id, String orderNo, String customerId, List<OrderSku> skus) {
+        if (skus == null || skus.isEmpty()) {
+            throw new IllegalArgumentException("订单明细不能为空");
+        }
+        return new Order(id, orderNo, customerId, new ArrayList<>(skus));
+    }
+
+    /** 审单通过：待确认 → 已确认 */
+    public void confirm() {
+        transitTo(OrderStatus.CONFIRMED);
+    }
+
+    /** 审单拒绝：待确认 → 已拒绝 */
+    public void reject(String reason) {
+        transitTo(OrderStatus.REJECTED);
+        this.rejectReason = reason;
+    }
+
+    /** 转单：已确认 → 转单中（对照旧项目 transferOrder 发送 Service Bus 前） */
+    public void startTransfer() {
+        transitTo(OrderStatus.TRANSFERRING);
+    }
+
+    /** 转单成功：转单中 → 已转单（对照旧项目 sendMessageLogRecords 成功分支） */
+    public void transferSuccess() {
+        transitTo(OrderStatus.TRANSFERRED);
+    }
+
+    /** 发货：已转单 → 已发货（对照旧项目 DELIVER_GOOD 状态回传） */
+    public void ship() {
+        transitTo(OrderStatus.SHIPPED);
+    }
+
+    /** 签收：已发货 → 已签收 */
+    public void sign() {
+        transitTo(OrderStatus.SIGNED);
+    }
+
+    /** 取消订单 */
+    public void cancel() {
+        transitTo(OrderStatus.CANCELLED);
+    }
+
+    /**
+     * 统一状态迁移入口（★状态机 = 幂等的核心）。
+     *
+     * <p>对照旧项目 {@code confirmationOfStatus}：非法迁移 / 重复状态直接拒绝。</p>
+     *
+     * @param target 目标状态
+     */
+    private void transitTo(OrderStatus target) {
+        if (!status.canTransitTo(target)) {
+            throw new IllegalStateException(
+                    "非法状态迁移: " + status + " -> " + target);
+        }
+        this.status = target;
+        this.updateTime = LocalDateTime.now();
+        // TODO（学习任务）：发布 OrderStatusChangedEvent（由应用层统一发布，领域层只记录）
+    }
+
+    // ---------- getters ----------
+
+    public OrderId getId() {
+        return id;
+    }
+
+    public String getOrderNo() {
+        return orderNo;
+    }
+
+    public String getCustomerId() {
+        return customerId;
+    }
+
+    public OrderStatus getStatus() {
+        return status;
+    }
+
+    public List<OrderSku> getSkus() {
+        return Collections.unmodifiableList(skus);
+    }
+
+    public BigDecimal getTotalAmount() {
+        return totalAmount;
+    }
+
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public BigDecimal getPayableAmount() {
+        return payableAmount;
+    }
+
+    public String getRejectReason() {
+        return rejectReason;
+    }
+
+    public LocalDateTime getCreateTime() {
+        return createTime;
+    }
+
+    public LocalDateTime getUpdateTime() {
+        return updateTime;
+    }
+}

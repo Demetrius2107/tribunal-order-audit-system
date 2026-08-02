@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: tribunal-order-service
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 独立库：tribunal_order（微服务独立数据库，对照 schema.sql）
+    url: jdbc:mysql://localhost:3306/tribunal_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+
+# customer-service 地址（Feign 直连；接入 Nacos 后可去掉 url 用服务名路由）
+customer:
+  service:
+    url: ${CUSTOMER_SERVICE_URL:http://localhost:8081}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+logging:
+  level:
+    com.demetrius.tribunal.order: debug
