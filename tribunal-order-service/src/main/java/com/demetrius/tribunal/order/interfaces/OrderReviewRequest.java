@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 /**
  * 审单接口请求 DTO（接口层）。
  *
- * <p>对照旧项目：{@code SalesmanController.reviewOrder} 审核订单接口入参。</p>
+ * <p>参照通用做法。</p>
  */
 public record OrderReviewRequest(
 
@@ -18,6 +18,6 @@ public record OrderReviewRequest(
         /** 拒绝原因（拒绝时必填，TODO：分组校验） */
         String reason,
 
-        /** 操作人（TODO：应从登录态获取，对照旧项目 @CurrentUser） */
+        /** 操作人（TODO：应从登录态获取，参照通用做法 */
         String operator) {
 }

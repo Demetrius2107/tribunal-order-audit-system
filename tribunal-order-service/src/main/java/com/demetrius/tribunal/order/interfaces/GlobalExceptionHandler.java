@@ -16,12 +16,12 @@ import java.util.stream.Collectors;
  *
  * <p>统一把异常转成 {@link ApiResponse}，接口层不再散落 try-catch。</p>
  *
- * <p>对照参考系统：ExceptionCast + 全局异常拦截。</p>
+ * <p>参照通用做法：统一异常拦截。</p>
  *
  * <p>TODO（学习任务）：</p>
  * <ul>
  *   <li>补充 Feign 调用失败的降级处理（FeignException / 超时）——里程碑 5</li>
- *   <li>补充未知异常（Exception）的日志记录（对照参考系统 LogException 落 ES）</li>
+ *   <li>补充未知异常（Exception）的日志记录（参照通用做法：异常日志落 ES）</li>
  * </ul>
  */
 @RestControllerAdvice

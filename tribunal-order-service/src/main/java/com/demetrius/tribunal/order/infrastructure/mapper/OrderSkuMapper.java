@@ -14,7 +14,7 @@ import java.util.List;
 @Mapper
 public interface OrderSkuMapper extends BaseMapper<OrderSkuPo> {
 
-    /** 按订单 ID 查明细（对照旧项目 OrderSkuDao 查询订单 SKU） */
+    /** 按订单 ID 查明细（参照通用做法 */
     @Select("SELECT * FROM t_order_sku WHERE order_id = #{orderId} AND deleted = 0")
     List<OrderSkuPo> findByOrderId(@Param("orderId") String orderId);
 }

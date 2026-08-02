@@ -16,7 +16,7 @@ import java.util.List;
 /**
  * 订单应用服务（用例编排层）。
  *
- * <p>对照旧项目：{@code OrderServiceImpl.saveFinalOrder} / {@code generateFinalOrder}。</p>
+ * <p>参照通用做法。</p>
  *
  * <p>应用层的职责（DDD）：</p>
  * <ol>
@@ -27,13 +27,11 @@ import java.util.List;
  * </ol>
  * <p>应用层不包含业务规则——业务规则在 domain 层（Order 聚合内部）。</p>
  *
- * <p>TODO（学习任务）——对照旧项目 {@code saveFinalOrder} 的完整流程：</p>
- * <ul>
- *   <li>① 下单前校验：客户是否存在、SKU 是否存在、整托校验、渠道校验（旧项目 buAuthManageDomain 校验）</li>
- *   <li>② 订单编号生成策略：对照旧项目 order code 规则（IdWorker + 业务前缀）</li>
- *   <li>③ 幂等：同客户同参数短时间重复提交拦截（对照 @NoRepeatCommit，里程碑 4 实现）</li>
- *   <li>④ 信用预占：下单即占用信用额度（对照旧项目 updateUserDiscountPoolCredit / creditProcessing）</li>
- *   <li>⑤ 折扣池 / 促销计算：下单时重算金额（对照促销计算引擎，先做基础版）</li>
+ * <p>TODO（学习任务）——参照通用做法</li>
+ *   <li>② 订单编号生成策略：参照通用做法</li>
+ *   <li>③ 幂等：同客户同参数短时间重复提交拦截（参照通用做法，里程碑 4 实现）</li>
+ *   <li>④ 信用预占：下单即占用信用额度（参照通用做法</li>
+ *   <li>⑤ 折扣池 / 促销计算：下单时重算金额（参照促销计算引擎，先做基础版）</li>
  * </ul>
  */
 @Service
@@ -57,7 +55,7 @@ public class OrderApplicationService {
      */
     @Transactional
     public OrderResult createOrder(OrderCreateCommand command) {
-        // TODO（学习任务）：校验客户/SKU 存在性、整托、渠道（旧项目 saveFinalOrder 前半段）
+        // TODO（学习任务）：校验客户/SKU 存在性、整托、渠道（行业通用做法 saveFinalOrder 前半段）
 
         // 组装聚合
         String orderIdValue = generateOrderId();
@@ -72,7 +70,7 @@ public class OrderApplicationService {
         // 保存聚合（事务内）
         orderRepository.save(order);
 
-        // 发布领域事件（通知/审计解耦，对照旧项目 unifySendMessage）
+        // 发布领域事件（通知/审计解耦，参照通用做法
         eventPublisher.publishEvent(new OrderCreatedEvent(
                 order.getId(), order.getOrderNo(), order.getCustomerId(), order.getCreateTime()));
 
@@ -84,7 +82,7 @@ public class OrderApplicationService {
      */
     @Transactional(readOnly = true)
     public OrderResult getOrder(String orderId) {
-        // TODO（学习任务）：不存在时抛业务异常（对照 ErrorCode.ORDER_EXISTED）
+        // TODO（学习任务）：不存在时抛业务异常（参照通用做法
         Order order = orderRepository.findById(new OrderId(orderId))
                 .orElseThrow(() -> new IllegalArgumentException("订单不存在: " + orderId));
         return OrderResult.from(order);
@@ -92,7 +90,7 @@ public class OrderApplicationService {
 
     /**
      * TODO（学习任务）：生成订单 ID。
-     * 对照旧项目 {@code IdWorkerUtil}（雪花算法），可用 MyBatis-Plus 的 ASSIGN_ID 或自建 IdWorker。
+     * 可用 MyBatis-Plus 的 ASSIGN_ID 或自建 ID 生成器（雪花算法）。
      */
     private String generateOrderId() {
         return java.util.UUID.randomUUID().toString().replace("-", "");
@@ -100,7 +98,7 @@ public class OrderApplicationService {
 
     /**
      * TODO（学习任务）：生成订单编号。
-     * 对照旧项目 order code 规则（如时间戳 + 业务前缀），需保证业务唯一（数据库唯一约束）。
+     * 需保证业务唯一（数据库唯一约束）。
      */
     private String generateOrderNo() {
         return "ORD" + System.currentTimeMillis();

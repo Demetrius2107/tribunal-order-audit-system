@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
  * 订单状态流水持久化对象（对应 t_order_status_record 表）。
  *
  * <p>每次订单状态迁移写一条流水 = 审计 + 幂等判断依据
- * （对照参考系统 order_status_process_record 表）。</p>
+ * （参照通用做法：订单状态流水表）。</p>
  */
 @Data
 @TableName("t_order_status_record")

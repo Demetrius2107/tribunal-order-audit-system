@@ -17,19 +17,16 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 审单应用服务。
  *
- * <p>对照旧项目：{@code SalesmanController.reviewOrder} / {@code OrderServiceImpl.orderReview}
- * （875 行审单逻辑）。</p>
+ * <p>。</p>
  *
  * <p>微服务说明：信用校验通过 {@link CustomerFeignClient} 远程调用 customer-service
  * 获取信用 DTO，再交给领域服务校验——跨服务边界用 DTO，业务规则仍在 order 领域层。</p>
  *
- * <p>TODO（学习任务）——对照旧项目 {@code orderReview} 完整实现：</p>
- * <ul>
- *   <li>① 审单权限：AD 账号层级审批链（两级审批）——里程碑 3/5</li>
- *   <li>② 审单前重新计价：促销/折扣/押金在审单时重算（对照促销计算引擎）</li>
+ * <p>TODO（学习任务）————里程碑 3/5</li>
+ *   <li>② 审单前重新计价：促销/折扣/押金在审单时重算（参照促销计算引擎）</li>
  *   <li>③ 审单通过后动作：通过 customer-service 接口正式扣减信用（下单是预占，审单是确定）、通知</li>
- *   <li>④ 审单拒绝：记录原因、释放信用预占、通知（对照 refuseToReason）</li>
- *   <li>⑤ 状态流水：每次迁移写 order_status_record（对照 saveOrderStatusProcessRecordDomain）</li>
+ *   <li>④ 审单拒绝：记录原因、释放信用预占、通知（参照通用做法</li>
+ *   <li>⑤ 状态流水：每次迁移写 order_status_record（参照通用做法</li>
  *   <li>⑥ Feign 失败处理：超时/熔断（骨架未引入，进阶项）</li>
  * </ul>
  */

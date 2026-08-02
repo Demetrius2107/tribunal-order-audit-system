@@ -15,7 +15,7 @@ import java.util.Map;
 /**
  * 订单接口层（REST 控制器）。
  *
- * <p>对照旧项目：{@code OrderController} / {@code SalesmanController}。</p>
+ * <p>参照通用做法。</p>
  *
  * <p>接口层职责（最薄）：</p>
  * <ol>
@@ -27,11 +27,11 @@ import java.util.Map;
  *
  * <p>TODO（学习任务）：</p>
  * <ul>
- *   <li>统一响应体封装（对照旧项目 BaseResponse / DataResponse / ErrorCode）</li>
- *   <li>全局异常处理（@RestControllerAdvice，对照旧项目 ExceptionCast / 异常拦截）</li>
- *   <li>操作日志注解（对照旧项目 @OperateLog）</li>
- *   <li>防重复提交注解（对照旧项目 @NoRepeatCommit，里程碑 4）</li>
- *   <li>分页查询接口（对照旧项目 PageInfo + pagehelper）</li>
+ *   <li>统一响应体封装（参照通用做法</li>
+ *   <li>全局异常处理（@RestControllerAdvice，参照通用做法</li>
+ *   <li>操作日志注解（参照通用做法</li>
+ *   <li>防重复提交注解（参照通用做法，里程碑 4）</li>
+ *   <li>分页查询接口（参照通用做法</li>
  * </ul>
  */
 @RestController
@@ -82,7 +82,7 @@ public class OrderController {
     }
 
     /**
-     * 心跳接口（对照旧项目 api/order/heartbeat，用于运维探活）。
+     * 心跳接口（参照通用做法，用于运维探活）。
      */
     @GetMapping("/heartbeat")
     public Map<String, String> heartbeat() {
