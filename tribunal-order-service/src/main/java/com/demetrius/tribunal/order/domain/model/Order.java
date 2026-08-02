@@ -9,19 +9,16 @@ import java.util.List;
 /**
  * 订单聚合根（★核心类）。
  *
- * <p>对照旧项目：{@code OrderServiceImpl}（14102 行的类）、{@code OrderDomain}。</p>
+ * <p>、。</p>
  *
  * <p>聚合根是 DDD 的核心：所有对订单的修改必须经过聚合根的方法，
  * 业务规则（状态机校验、金额校验）内聚在聚合内部，而不是散落在 Service 里。</p>
  *
- * <p>TODO（学习任务）——对照旧项目 {@code saveFinalOrder} / {@code generateFinalOrder} /
- * {@code stateOfChange} 逐一补齐：</p>
- * <ul>
- *   <li>创建时校验：明细不能为空、金额不能为负、客户必须存在（需要 CustomerRepository，注意不要在领域层注入仓储——通过领域服务/应用层编排）</li>
- *   <li>金额计算：总金额 = Σ明细金额；折扣、押金、税、运费如何参与（对照促销计算）</li>
- *   <li>信用校验：审单前校验客户信用额度（对照 creditProcessing / checkTheAmountPayable）</li>
- *   <li>操作日志 / 状态流水：每次状态迁移写 order_status_record（对照 saveOrderStatusProcessRecordDomain）</li>
- *   <li>幂等：同一订单重复提交/重复状态回传的处理（对照 confirmationOfStatus）</li>
+ * <p>TODO（学习任务）——参照通用做法，注意不要在领域层注入仓储——通过领域服务/应用层编排）</li>
+ *   <li>金额计算：总金额 = Σ明细金额；折扣、押金、税、运费如何参与（参照促销计算）</li>
+ *   <li>信用校验：审单前校验客户信用额度（参照通用做法</li>
+ *   <li>操作日志 / 状态流水：每次状态迁移写 order_status_record（参照通用做法</li>
+ *   <li>幂等：同一订单重复提交/重复状态回传的处理（参照通用做法</li>
  * </ul>
  */
 public class Order {
@@ -44,7 +41,7 @@ public class Order {
 
     private BigDecimal payableAmount;
 
-    /** 拒绝原因（审单拒绝时记录，对照旧项目 refuseToReason） */
+    /** 拒绝原因（审单拒绝时记录，参照通用做法 */
     private String rejectReason;
 
     private LocalDateTime createTime;
@@ -136,17 +133,17 @@ public class Order {
         this.rejectReason = reason;
     }
 
-    /** 转单：已确认 → 转单中（对照旧项目 transferOrder 发送 Service Bus 前） */
+    /** 转单：已确认 → 转单中（参照通用做法 */
     public void startTransfer() {
         transitTo(OrderStatus.TRANSFERRING);
     }
 
-    /** 转单成功：转单中 → 已转单（对照旧项目 sendMessageLogRecords 成功分支） */
+    /** 转单成功：转单中 → 已转单（参照通用做法 */
     public void transferSuccess() {
         transitTo(OrderStatus.TRANSFERRED);
     }
 
-    /** 发货：已转单 → 已发货（对照旧项目 DELIVER_GOOD 状态回传） */
+    /** 发货：已转单 → 已发货（参照通用做法 */
     public void ship() {
         transitTo(OrderStatus.SHIPPED);
     }
@@ -164,7 +161,7 @@ public class Order {
     /**
      * 统一状态迁移入口（★状态机 = 幂等的核心）。
      *
-     * <p>对照旧项目 {@code confirmationOfStatus}：非法迁移 / 重复状态直接拒绝。</p>
+     * <p>参照通用做法。</p>
      *
      * @param target 目标状态
      */

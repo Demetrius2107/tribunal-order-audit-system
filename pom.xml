@@ -20,8 +20,15 @@
 
     <modules>
         <module>tribunal-common</module>
+        <module>tribunal-auth-service</module>
         <module>tribunal-customer-service</module>
         <module>tribunal-order-service</module>
+        <module>tribunal-inventory-service</module>
+        <module>tribunal-billing-service</module>
+        <module>tribunal-marketing-service</module>
+        <module>tribunal-fulfillment-service</module>
+        <module>tribunal-notification-service</module>
+        <module>tribunal-task-service</module>
     </modules>
 
     <properties>

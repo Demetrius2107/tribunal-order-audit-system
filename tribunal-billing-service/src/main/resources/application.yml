@@ -1,0 +1,33 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: tribunal-billing-service
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 独立库：tribunal_billing（金融账单处理模块独立数据库）
+    url: jdbc:mysql://localhost:3306/tribunal_billing?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root
+
+# 订单服务地址（账单状态回传 Feign 调用）
+order:
+  service:
+    url: ${ORDER_SERVICE_URL:http://localhost:8080}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    banner: false
+    db-config:
+      id-type: assign_id
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+logging:
+  level:
+    com.demetrius.tribunal.billing: debug

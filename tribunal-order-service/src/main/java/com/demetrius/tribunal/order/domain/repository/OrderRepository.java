@@ -11,10 +11,8 @@ import java.util.Optional;
  * <p>接口定义在领域层，实现放在基础设施层（OrderRepositoryImpl）。
  * 领域层只依赖接口，不依赖 MyBatis/JPA 等任何持久化技术。</p>
  *
- * <p>TODO（学习任务）：对照旧项目 OrderDao / OrderSkuDao：</p>
- * <ul>
- *   <li>思考：save 时聚合内的 skus 如何一起持久化（事务边界）</li>
- *   <li>补充分页查询接口（对照旧项目 pagehelper 用法）</li>
+ * <p>TODO（学习任务）：参照通用做法</li>
+ *   <li>补充分页查询接口（参照通用做法</li>
  *   <li>思考：查询返回聚合还是返回数据对象？DDD 要求返回聚合（完整还原）</li>
  * </ul>
  */

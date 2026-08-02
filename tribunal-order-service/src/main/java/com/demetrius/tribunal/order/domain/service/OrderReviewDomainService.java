@@ -11,8 +11,7 @@ import java.util.Map;
 /**
  * 审单领域服务（★业务规则集中地）。
  *
- * <p>对照旧项目：{@code SalesmanController.reviewOrder}、{@code OrderServiceImpl.orderReview}
- * （875 行审单逻辑）、信用检查（creditProcessing / checkTheAmountPayable）。</p>
+ * <p>审单规则涉及订单聚合与客户信用（跨服务通过 Feign 获取）。</p>
  *
  * <p>为什么需要领域服务：当一条业务规则涉及多个聚合/服务（订单 + 客户信用）时，
  * 放任何一个聚合里都不合适，就放到领域服务里。</p>
@@ -21,13 +20,11 @@ import java.util.Map;
  * {@link CustomerCreditDto}（Feign 远程查询结果）做校验，order-service 不直接依赖
  * customer 领域对象——跨服务边界用 DTO 而非领域对象。</p>
  *
- * <p>TODO（学习任务）——对照旧项目逐条实现校验：</p>
- * <ul>
- *   <li>① 状态校验：由 Order 聚合内部的状态机保证（confirm() 已做）</li>
- *   <li>② 信用校验：客户可用信用 ≥ 订单应付金额，否则拒绝（对照 ErrorCode 信用不足）</li>
- *   <li>③ 整托校验：SKU 数量必须满足整托倍数（对照 wholePalletCheck，行业特有）</li>
- *   <li>④ 促销/折扣规则：审单时是否重新计算金额（对照促销计算引擎）</li>
- *   <li>⑤ 审单权限：谁有权限审单（对照旧项目权限体系）</li>
+ * <p>TODO（学习任务）——参照通用做法) 已做）</li>
+ *   <li>② 信用校验：客户可用信用 ≥ 订单应付金额，否则拒绝（参照通用做法信用不足）</li>
+ *   <li>③ 整托校验：SKU 数量必须满足整托倍数（参照通用做法，行业特有）</li>
+ *   <li>④ 促销/折扣规则：审单时是否重新计算金额（参照促销计算引擎）</li>
+ *   <li>⑤ 审单权限：谁有权限审单（参照通用做法</li>
  * </ul>
  */
 public class OrderReviewDomainService {
@@ -67,10 +64,10 @@ public class OrderReviewDomainService {
     /**
      * 整托校验：SKU 数量必须能被该 SKU 的整托规格整除。
      *
-     * <p>对照旧项目 {@code wholePalletCheck}（啤酒行业特有规则：按托盘售卖，数量必须是整托倍数）。</p>
+     * <p>参照通用做法，数量必须是整托倍数）。</p>
      *
      * <p>说明：整托规格（每个 SKU 一托多少瓶）在真实系统里来自 SKU 主数据服务，
-     * 这里通过 {@code palletSizeBySku} 参数传入，由应用服务负责组装
+     * 这里通过  参数传入，由应用服务负责组装
      * （TODO：后续可新增 sku-service 通过 Feign 查询）。</p>
      *
      * @param order          订单聚合

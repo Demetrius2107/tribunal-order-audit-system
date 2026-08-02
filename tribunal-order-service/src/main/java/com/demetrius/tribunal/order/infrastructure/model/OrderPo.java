@@ -14,10 +14,8 @@ import java.time.LocalDateTime;
  *
  * <p>注意：PO 是「数据的载体」，与领域聚合 Order 分离——由 RepositoryImpl 负责转换。</p>
  *
- * <p>TODO（学习任务）：对照旧项目 OrderDomain / t_order 表补充字段：</p>
- * <ul>
- *   <li>订单类型（普通/冬储）、配送方式、送货地址</li>
- *   <li>拒绝原因 refuse_reason、失败原因（对照 OrderTransferFail）</li>
+ * <p>TODO（学习任务）：、配送方式、送货地址</li>
+ *   <li>拒绝原因 refuse_reason、失败原因（参照通用做法</li>
  *   <li>版本号 version（乐观锁，并发控制）</li>
  * </ul>
  */

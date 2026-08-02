@@ -8,8 +8,8 @@ import java.time.LocalDateTime;
 /**
  * 订单状态变更领域事件。
  *
- * <p>对照旧项目：{@code OrderStatusProcessRecord}（状态流水）、
- * {@code asynchronousMessageSending}（状态变更后异步发消息）、
+ * <p>、
+ * （状态变更后异步发消息）、
  * RabbitMqReceiverHandler（消费通知队列）。</p>
  *
  * <p>订阅者可以做的事：</p>

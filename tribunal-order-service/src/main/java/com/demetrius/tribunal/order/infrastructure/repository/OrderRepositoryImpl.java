@@ -25,10 +25,10 @@ import java.util.Optional;
  *
  * <p>TODO（学习任务）：</p>
  * <ul>
- *   <li>① 幂等判断：save 时按 orderNo 查重（对照旧项目订单编号唯一约束）</li>
+ *   <li>① 幂等判断：save 时按 orderNo 查重（参照通用做法</li>
  *   <li>② 事务边界：save 需要同时写 order + order_sku，事务应放在应用服务层（当前 @Transactional 在应用服务）</li>
- *   <li>③ 乐观锁：PO 加 @Version，save 时防止并发覆盖（对照旧项目 ReentrantLock 想解决的问题）</li>
- *   <li>④ 状态流水：每次状态变更写 t_order_status_record（对照旧项目 saveOrderStatusProcessRecordDomain）</li>
+ *   <li>③ 乐观锁：PO 加 @Version，save 时防止并发覆盖（参照通用做法</li>
+ *   <li>④ 状态流水：每次状态变更写 t_order_status_record（参照通用做法</li>
  * </ul>
  */
 @Repository

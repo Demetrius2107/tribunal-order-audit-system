@@ -5,14 +5,12 @@ import java.math.BigDecimal;
 /**
  * 订单明细（聚合内实体）。
  *
- * <p>对照旧项目：{@code OrderSkuDomain} / {@code order_sku} 表。</p>
+ * <p>参照通用做法。</p>
  *
  * <p>聚合内实体没有独立生命周期：不能脱离订单单独存在，只能通过聚合根 Order 的方法增删改。</p>
  *
- * <p>TODO（学习任务）：对照旧项目 {@code OrderServiceImpl.extractedSku} / {@code addOrderSku}：</p>
- * <ul>
- *   <li>补充更多字段：托盘数（palletNum）、押金（deposit）、折扣前金额（discountBeforeAmount）等</li>
- *   <li>补充数量校验：数量必须大于 0；整托校验（wholePalletCheck，啤酒行业特有）</li>
+ * <p>TODO（学习任务）：、押金（deposit）、折扣前金额（discountBeforeAmount）等</li>
+ *   <li>补充数量校验：数量必须大于 0；整托校验（啤酒行业特有）</li>
  *   <li>金额计算规则：amount = price * quantity，折扣、押金、税如何参与——这是促销计算的核心</li>
  * </ul>
  */
