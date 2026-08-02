@@ -9,7 +9,10 @@ import com.demetrius.tribunal.order.client.BillTransferRequest;
 import com.demetrius.tribunal.order.client.BillTransferResult;
 import com.demetrius.tribunal.order.client.BillingFeignClient;
 import com.demetrius.tribunal.order.client.CustomerFeignClient;
+import com.demetrius.tribunal.order.client.FulfillmentFeignClient;
 import com.demetrius.tribunal.order.client.InventoryFeignClient;
+import com.demetrius.tribunal.order.client.MarketingFeignClient;
+import com.demetrius.tribunal.order.client.NotificationFeignClient;
 import com.demetrius.tribunal.order.domain.event.OrderStatusChangedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
@@ -47,9 +50,15 @@ public class OrderReviewApplicationService {
 
     private final CustomerFeignClient customerFeignClient;
 
+    private final MarketingFeignClient marketingFeignClient;
+
     private final InventoryFeignClient inventoryFeignClient;
 
     private final BillingFeignClient billingFeignClient;
+
+    private final FulfillmentFeignClient fulfillmentFeignClient;
+
+    private final NotificationFeignClient notificationFeignClient;
 
     private final OrderReviewDomainService reviewDomainService;
 
@@ -57,14 +66,20 @@ public class OrderReviewApplicationService {
 
     public OrderReviewApplicationService(OrderRepository orderRepository,
                                          CustomerFeignClient customerFeignClient,
+                                         MarketingFeignClient marketingFeignClient,
                                          InventoryFeignClient inventoryFeignClient,
                                          BillingFeignClient billingFeignClient,
+                                         FulfillmentFeignClient fulfillmentFeignClient,
+                                         NotificationFeignClient notificationFeignClient,
                                          OrderReviewDomainService reviewDomainService,
                                          ApplicationEventPublisher eventPublisher) {
         this.orderRepository = orderRepository;
         this.customerFeignClient = customerFeignClient;
+        this.marketingFeignClient = marketingFeignClient;
         this.inventoryFeignClient = inventoryFeignClient;
         this.billingFeignClient = billingFeignClient;
+        this.fulfillmentFeignClient = fulfillmentFeignClient;
+        this.notificationFeignClient = notificationFeignClient;
         this.reviewDomainService = reviewDomainService;
         this.eventPublisher = eventPublisher;
     }
@@ -90,13 +105,16 @@ public class OrderReviewApplicationService {
     }
 
     /**
-     * 审单通过：信用校验 → 预占库存 → 生成账单 → 状态迁移 → 保存 → 发布事件。
+     * 审单通过：信用校验 → 取价 → 预占库存 → 生成账单 → 创建履约 → 发送通知 → 状态迁移。
      *
-     * <p>三合一编排链（对应需求 F-306/F-302/F-307）：</p>
+     * <p>五合一编排链（对应需求 F-306/F-302/F-307/F-503/F-601）：</p>
      * <ol>
      *   <li>信用校验（customer-service）</li>
+     *   <li>取价校验（marketing-service，上游"金额"数据源）</li>
      *   <li>预占库存（inventory-service，逐 SKU 预占）</li>
      *   <li>生成账单（billing-service，转单）</li>
+     *   <li>创建履约（fulfillment-service，发货/签收/发送工厂）</li>
+     *   <li>发送通知（notification-service，站内信/邮件）</li>
      *   <li>订单状态迁移：待确认 → 已确认</li>
      * </ol>
      */
@@ -105,12 +123,18 @@ public class OrderReviewApplicationService {
         CustomerCreditDto credit = customerFeignClient.getCustomerCredit(order.getCustomerId());
         reviewDomainService.validateForReview(order, credit, operator);
 
-        // ② 预占库存（逐 SKU 调 inventory-service；TODO：失败处理/整体回滚）
+        // ② 取价校验（marketing-service，上游"金额"；TODO：用真实价格覆盖前端传入价）
+        for (OrderSku sku : order.getSkus()) {
+            marketingFeignClient.quotePrice(
+                    sku.getSkuCode(), order.getCustomerId(), null, null);
+        }
+
+        // ③ 预占库存（逐 SKU 调 inventory-service；TODO：失败处理/整体回滚）
         for (OrderSku sku : order.getSkus()) {
             inventoryFeignClient.reserve(sku.getSkuCode(), sku.getQuantity());
         }
 
-        // ③ 生成账单（转单到 billing-service；TODO：失败处理）
+        // ④ 生成账单（转单到 billing-service；TODO：失败处理）
         ApiResponse<BillTransferResult> billResponse = billingFeignClient.transfer(new BillTransferRequest(
                 order.getOrderNo(),
                 order.getCustomerId(),
@@ -119,7 +143,21 @@ public class OrderReviewApplicationService {
                                 s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
                         .toList()));
 
-        // ④ 状态迁移（聚合内部校验，非法迁移抛异常）
+        // ⑤ 创建履约（fulfillment-service；TODO：失败处理）
+        fulfillmentFeignClient.create(new FulfillmentFeignClient.FulfillmentCreateRequest(
+                order.getOrderNo(),
+                order.getCustomerId(),
+                order.getSkus().stream()
+                        .map(s -> new FulfillmentFeignClient.FulfillmentCreateRequest.FulfillmentLineItem(
+                                s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
+                        .toList()));
+
+        // ⑥ 发送通知（notification-service；TODO：通知模板/接收人规则）
+        notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
+                "SITE_MESSAGE", order.getCustomerId(), "订单已确认",
+                "您的订单 " + order.getOrderNo() + " 已通过审单"));
+
+        // ⑦ 状态迁移（聚合内部校验，非法迁移抛异常）
         OrderStatusChangedEvent event = new OrderStatusChangedEvent(
                 order.getId(), order.getOrderNo(), order.getStatus(), null, null);
         order.confirm();
