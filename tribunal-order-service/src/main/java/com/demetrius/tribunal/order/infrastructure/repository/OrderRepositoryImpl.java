@@ -89,10 +89,19 @@ public class OrderRepositoryImpl implements OrderRepository {
         List<OrderSku> skus = skuPos.stream()
                 .map(s -> new OrderSku(s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
                 .toList();
-        Order order = Order.create(new OrderId(po.getId()), po.getOrderNo(),
-                po.getCustomerId(), skus);
-        // TODO（学习任务）：金额/状态等字段还原（当前 Order 的字段不可变，需要加「还原方法」或构造器重载）
-        return order;
+        // 完整还原聚合：状态/金额/拒绝原因/时间戳均来自数据库（restore 不做任何重算）
+        return Order.restore(
+                new OrderId(po.getId()),
+                po.getOrderNo(),
+                po.getCustomerId(),
+                skus,
+                OrderStatus.valueOf(po.getStatus()),
+                po.getTotalAmount(),
+                po.getDiscountAmount(),
+                po.getPayableAmount(),
+                po.getRejectReason(),
+                po.getCreateTime(),
+                po.getUpdateTime());
     }
 
     private OrderPo toPo(Order order) {
