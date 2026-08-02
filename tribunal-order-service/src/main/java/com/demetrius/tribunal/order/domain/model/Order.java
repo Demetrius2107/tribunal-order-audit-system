@@ -68,6 +68,26 @@ public class Order {
     }
 
     /**
+     * 还原构造器：从持久化数据完整还原聚合（由 restore() 调用）。
+     */
+    private Order(OrderId id, String orderNo, String customerId, List<OrderSku> skus,
+                  OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
+                  BigDecimal payableAmount, String rejectReason,
+                  LocalDateTime createTime, LocalDateTime updateTime) {
+        this.id = id;
+        this.orderNo = orderNo;
+        this.customerId = customerId;
+        this.skus = skus;
+        this.status = status;
+        this.totalAmount = totalAmount;
+        this.discountAmount = discountAmount;
+        this.payableAmount = payableAmount;
+        this.rejectReason = rejectReason;
+        this.createTime = createTime;
+        this.updateTime = updateTime;
+    }
+
+    /**
      * 工厂方法：创建订单（初始状态 = 待确认）。
      *
      * @param id         订单 ID
@@ -81,6 +101,28 @@ public class Order {
             throw new IllegalArgumentException("订单明细不能为空");
         }
         return new Order(id, orderNo, customerId, new ArrayList<>(skus));
+    }
+
+    /**
+     * 还原工厂方法：从持久化数据完整还原聚合（仓储读取时使用）。
+     *
+     * <p>与 create() 的区别：create 用于新订单（初始状态待确认、金额由 SKU 计算），
+     * restore 用于还原已有订单（状态/金额/时间戳均来自数据库，不做任何重算）。</p>
+     *
+     * @param status         已持久化的状态
+     * @param totalAmount    已持久化的总金额
+     * @param discountAmount 已持久化的折扣金额
+     * @param payableAmount  已持久化的应付金额
+     * @param rejectReason   拒绝原因（可能为 null）
+     * @param createTime     创建时间
+     * @param updateTime     更新时间
+     */
+    public static Order restore(OrderId id, String orderNo, String customerId, List<OrderSku> skus,
+                                OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
+                                BigDecimal payableAmount, String rejectReason,
+                                LocalDateTime createTime, LocalDateTime updateTime) {
+        return new Order(id, orderNo, customerId, skus, status, totalAmount, discountAmount,
+                payableAmount, rejectReason, createTime, updateTime);
     }
 
     /** 审单通过：待确认 → 已确认 */
