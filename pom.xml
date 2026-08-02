@@ -22,7 +22,8 @@
         <module>tribunal-common</module>
         <module>tribunal-customer-service</module>
         <module>tribunal-order-service</module>
-        <module>tribunal-erp-service</module>
+        <module>tribunal-inventory-service</module>
+        <module>tribunal-billing-service</module>
     </modules>
 
     <properties>

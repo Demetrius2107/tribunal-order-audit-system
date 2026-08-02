@@ -16,6 +16,16 @@ customer:
   service:
     url: ${CUSTOMER_SERVICE_URL:http://localhost:8081}
 
+# 金融账单服务地址（转单 Feign 调用）
+billing:
+  service:
+    url: ${BILLING_SERVICE_URL:http://localhost:8082}
+
+# 库存物料服务地址（库存预占/释放 Feign 调用）
+inventory:
+  service:
+    url: ${INVENTORY_SERVICE_URL:http://localhost:8083}
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
