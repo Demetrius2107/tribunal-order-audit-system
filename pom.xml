@@ -19,16 +19,23 @@
     <description>tribunal-order-audit-system — 按领域拆分的微服务订单审单系统（Author: Demetrius2107）</description>
 
     <modules>
-        <module>tribunal-common</module>
-        <module>tribunal-auth-service</module>
-        <module>tribunal-customer-service</module>
+        <!-- 系统一：订单审单系统（9 业务模块 + 共享库） -->
+        <module>tribunal-order-common</module>
+        <module>tribunal-order-auth-service</module>
+        <module>tribunal-order-customer-service</module>
         <module>tribunal-order-service</module>
-        <module>tribunal-inventory-service</module>
-        <module>tribunal-billing-service</module>
-        <module>tribunal-marketing-service</module>
-        <module>tribunal-fulfillment-service</module>
-        <module>tribunal-notification-service</module>
-        <module>tribunal-task-service</module>
+        <module>tribunal-order-inventory-service</module>
+        <module>tribunal-order-billing-service</module>
+        <module>tribunal-order-marketing-service</module>
+        <module>tribunal-order-fulfillment-service</module>
+        <module>tribunal-order-notification-service</module>
+        <module>tribunal-order-task-service</module>
+        <!-- 系统二：库存推送系统（上游数据集成网关，独立 common） -->
+        <module>tribunal-inventory-push-common</module>
+        <module>tribunal-inventory-push-service</module>
+        <!-- 系统三：金融结算系统（下游资金结算中枢，独立 common） -->
+        <module>tribunal-finance-settlement-common</module>
+        <module>tribunal-finance-settlement-service</module>
     </modules>
 
     <properties>
@@ -51,7 +58,17 @@
             <!-- 内部模块版本管理 -->
             <dependency>
                 <groupId>com.demetrius</groupId>
-                <artifactId>tribunal-common</artifactId>
+                <artifactId>tribunal-order-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.demetrius</groupId>
+                <artifactId>tribunal-inventory-push-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.demetrius</groupId>
+                <artifactId>tribunal-finance-settlement-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>

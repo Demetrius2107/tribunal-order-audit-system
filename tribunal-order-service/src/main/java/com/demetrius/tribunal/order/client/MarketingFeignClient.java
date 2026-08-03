@@ -14,7 +14,7 @@ import java.math.BigDecimal;
  *
  * <p>用途：下单/审单时取价（客户价→客户组价→区域价），替代前端传入价格。</p>
  */
-@FeignClient(name = "tribunal-marketing-service",
+@FeignClient(name = "tribunal-order-marketing-service",
         url = "${marketing.service.url:http://localhost:8084}")
 public interface MarketingFeignClient {
 

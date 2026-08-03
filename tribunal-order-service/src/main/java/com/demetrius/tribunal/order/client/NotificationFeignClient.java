@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  *
  * <p>用途：下单/审单/状态变更时发送通知（站内信给经销商、邮件给销售）。</p>
  */
-@FeignClient(name = "tribunal-notification-service",
+@FeignClient(name = "tribunal-order-notification-service",
         url = "${notification.service.url:http://localhost:8086}")
 public interface NotificationFeignClient {
 

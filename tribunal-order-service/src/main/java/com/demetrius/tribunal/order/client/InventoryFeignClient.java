@@ -22,7 +22,7 @@ import java.math.BigDecimal;
  *   <li>接入 Nacos 后去掉 url 直连</li>
  * </ul>
  */
-@FeignClient(name = "tribunal-inventory-service",
+@FeignClient(name = "tribunal-order-inventory-service",
         url = "${inventory.service.url:http://localhost:8083}")
 public interface InventoryFeignClient {
 

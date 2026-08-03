@@ -15,7 +15,7 @@ import java.util.List;
  *
  * <p>用途：账单结算后创建履约单，执行发货/签收并发送工厂指令。</p>
  */
-@FeignClient(name = "tribunal-fulfillment-service",
+@FeignClient(name = "tribunal-order-fulfillment-service",
         url = "${fulfillment.service.url:http://localhost:8085}")
 public interface FulfillmentFeignClient {
 
