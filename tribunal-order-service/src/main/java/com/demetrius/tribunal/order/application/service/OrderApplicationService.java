@@ -110,6 +110,16 @@ public class OrderApplicationService {
                                 r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
                         .toList());
 
+        // 折扣池抵扣（F-204：用折扣池余额冲抵应付金额，业务文档三节）
+        if (command.discountPoolDeduction() != null
+                && command.discountPoolDeduction().compareTo(BigDecimal.ZERO) > 0) {
+            order.applyDiscountPoolDeduction(command.discountPoolDeduction());
+        }
+        // 运费（F-103：按送货地址/SKU 计算，参与金额汇总）
+        if (command.shippingFee() != null && command.shippingFee().compareTo(BigDecimal.ZERO) > 0) {
+            order.applyShippingFee(command.shippingFee());
+        }
+
         // 整托校验：SKU 数量必须是整托规格的倍数（业务文档五节 F-302，规格来自 SKU 主数据）
         reviewDomainService.validateWholePallet(order, command.palletSpecs());
 

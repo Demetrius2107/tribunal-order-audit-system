@@ -68,7 +68,9 @@ public class OrderController {
                 request.returnablePackagings() == null ? List.of() : request.returnablePackagings().stream()
                         .map(r -> new OrderCreateCommand.ReturnableItem(
                                 r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
-                        .toList());
+                        .toList(),
+                request.discountPoolDeduction(),
+                request.shippingFee());
         return orderApplicationService.createOrder(command);
     }
 

@@ -33,7 +33,13 @@ public record OrderCreateRequest(
         Boolean carPooling,
 
         /** 空包装回收明细（可选；业务文档九节） */
-        List<ReturnableItemRequest> returnablePackagings) {
+        List<ReturnableItemRequest> returnablePackagings,
+
+        /** 折扣池抵扣金额（可选，默认 0；业务文档三节：用折扣池余额冲抵应付） */
+        BigDecimal discountPoolDeduction,
+
+        /** 运费（可选，默认 0；F-103 按送货地址/SKU 计算） */
+        BigDecimal shippingFee) {
 
     public OrderCreateRequest {
         if (orderType == null) {
@@ -41,6 +47,12 @@ public record OrderCreateRequest(
         }
         if (carPooling == null) {
             carPooling = Boolean.FALSE;
+        }
+        if (discountPoolDeduction == null) {
+            discountPoolDeduction = BigDecimal.ZERO;
+        }
+        if (shippingFee == null) {
+            shippingFee = BigDecimal.ZERO;
         }
     }
 

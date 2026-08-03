@@ -93,4 +93,34 @@ class OrderAmountTest {
             order.applyDiscountPoolDeduction(BigDecimal.valueOf(200)); // 500-400-200 < 0
         });
     }
+
+    @Test
+    @DisplayName("运费：应付金额 = 总金额 + 运费（F-103）")
+    void shouldApplyShippingFee() {
+        Order order = newOrder(); // 总金额 500
+        order.applyShippingFee(BigDecimal.valueOf(100));
+        assertEquals(0, BigDecimal.valueOf(600).compareTo(order.getPayableAmount()));
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(order.getShippingFee()));
+    }
+
+    @Test
+    @DisplayName("运费为负拒绝")
+    void shouldRejectNegativeShippingFee() {
+        Order order = newOrder();
+        assertThrows(IllegalArgumentException.class,
+                () -> order.applyShippingFee(BigDecimal.valueOf(-1)));
+    }
+
+    @Test
+    @DisplayName("完整金额链路：总金额 - 折扣 - 折扣池抵扣 + 押金 + 税 + 运费")
+    void shouldCalcFullPayableChain() {
+        Order order = newOrder(); // 总金额 500
+        order.applyDiscount(BigDecimal.valueOf(100));
+        order.applyDiscountPoolDeduction(BigDecimal.valueOf(50));
+        order.applyDeposit(BigDecimal.valueOf(20));
+        order.applyTax(BigDecimal.valueOf(30));
+        order.applyShippingFee(BigDecimal.valueOf(100));
+        // 500 - 100 - 50 + 20 + 30 + 100 = 500
+        assertEquals(0, BigDecimal.valueOf(500).compareTo(order.getPayableAmount()));
+    }
 }

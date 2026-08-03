@@ -56,6 +56,9 @@ public class OrderPo {
     /** 税费 */
     private BigDecimal taxAmount;
 
+    /** 运费 */
+    private BigDecimal shippingFee;
+
     private BigDecimal payableAmount;
 
     private String rejectReason;

@@ -27,6 +27,7 @@ CREATE TABLE t_order (
     discount_pool_deduction DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '折扣池抵扣（用折扣池余额冲抵应付）',
     deposit_amount  DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '押金（包装物押金）',
     tax_amount      DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '税费',
+    shipping_fee    DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '运费（F-103 按送货地址/SKU 计算）',
     payable_amount  DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '应付金额',
     reject_reason   VARCHAR(512)  NULL COMMENT '拒绝原因',
     create_time     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

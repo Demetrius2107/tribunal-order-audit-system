@@ -60,6 +60,9 @@ public class Order {
     /** 税费（业务文档四节：与折扣、押金并列参与金额汇总） */
     private BigDecimal taxAmount;
 
+    /** 运费（F-103：按送货地址/SKU 计算，参与金额汇总） */
+    private BigDecimal shippingFee;
+
     private BigDecimal payableAmount;
 
     /** 拒绝原因（审单拒绝时记录，参照通用做法 */
@@ -77,6 +80,7 @@ public class Order {
                   List<ReturnablePackaging> returnablePackagings,
                   OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
                   BigDecimal discountPoolDeduction, BigDecimal depositAmount, BigDecimal taxAmount,
+                  BigDecimal shippingFee,
                   BigDecimal payableAmount, String rejectReason,
                   LocalDateTime createTime, LocalDateTime updateTime) {
         this.id = id;
@@ -93,6 +97,7 @@ public class Order {
         this.discountPoolDeduction = discountPoolDeduction;
         this.depositAmount = depositAmount;
         this.taxAmount = taxAmount;
+        this.shippingFee = shippingFee;
         this.payableAmount = payableAmount;
         this.rejectReason = rejectReason;
         this.createTime = createTime;
@@ -144,6 +149,7 @@ public class Order {
                 new ArrayList<>(skus), rps,
                 OrderStatus.TO_BE_CONFIRMED,
                 total, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                BigDecimal.ZERO,
                 payable, null, now, now);
     }
 
@@ -155,12 +161,13 @@ public class Order {
                                 List<ReturnablePackaging> returnablePackagings,
                                 OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
                                 BigDecimal discountPoolDeduction, BigDecimal depositAmount, BigDecimal taxAmount,
+                                BigDecimal shippingFee,
                                 BigDecimal payableAmount, String rejectReason,
                                 LocalDateTime createTime, LocalDateTime updateTime) {
         return new Order(id, orderNo, customerId, orderType, carPooling, carPoolJoined,
                 skus, returnablePackagings,
                 status, totalAmount, discountAmount,
-                discountPoolDeduction, depositAmount, taxAmount,
+                discountPoolDeduction, depositAmount, taxAmount, shippingFee,
                 payableAmount, rejectReason, createTime, updateTime);
     }
 
@@ -190,7 +197,7 @@ public class Order {
     /**
      * 重算订单金额（明细重新定价后调用，金额规则集中在 OrderAmountCalculator）。
      *
-     * <p>业务文档三/四/九节：应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税 + 空包装回收押金。</p>
+     * <p>业务文档三/四/九节：应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税 + 运费 + 空包装回收押金。</p>
      */
     public void recalculateAmounts() {
         this.totalAmount = skus.stream()
@@ -204,6 +211,7 @@ public class Order {
                 .subtract(nz(discountPoolDeduction))
                 .add(nz(depositAmount))
                 .add(nz(taxAmount))
+                .add(nz(shippingFee))
                 .add(returnableDeposit);
         if (this.payableAmount.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("订单应付金额不能为负（折扣/折扣池抵扣过大）");
@@ -248,6 +256,15 @@ public class Order {
             throw new IllegalArgumentException("税费不能为负");
         }
         this.taxAmount = tax;
+        recalculateAmounts();
+    }
+
+    /** 应用运费（F-103：按送货地址/SKU 计算，参与金额汇总） */
+    public void applyShippingFee(BigDecimal shippingFee) {
+        if (shippingFee == null || shippingFee.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("运费不能为负");
+        }
+        this.shippingFee = shippingFee;
         recalculateAmounts();
     }
 
@@ -391,6 +408,10 @@ public class Order {
 
     public BigDecimal getTaxAmount() {
         return taxAmount;
+    }
+
+    public BigDecimal getShippingFee() {
+        return shippingFee;
     }
 
     public BigDecimal getPayableAmount() {
