@@ -18,7 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
  *   <li>思考：跨服务失败处理（熔断/降级/超时）——骨架未引入 Sentinel/Resilience4j</li>
  * </ul>
  */
-@FeignClient(name = "tribunal-customer-service",
+@FeignClient(name = "tribunal-order-customer-service",
         url = "${customer.service.url:http://localhost:8081}")
 public interface CustomerFeignClient {
 

@@ -11,9 +11,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>tribunal-common</artifactId>
-    <name>tribunal-common</name>
-    <description>共享模块：统一响应 / 业务异常 / 跨服务 Feign DTO</description>
+    <artifactId>tribunal-order-common</artifactId>
+    <name>tribunal-order-common</name>
+    <description>订单审单系统共享模块：统一响应 / 业务异常 / 跨服务 Feign DTO</description>
 
     <dependencies>
         <!-- 仅依赖 Jakarta 注解与 Spring 基础类型，不引入持久化/Web 框架 -->

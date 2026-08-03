@@ -16,7 +16,7 @@
     <description>金融结算系统（资金结算中枢：账单生成/扣款/分账/退款/结算/对账）</description>
 
     <dependencies>
-        <!-- 使用本系统独立 common，不复用订单系统的 tribunal-common -->
+        <!-- 使用本系统独立 common，不复用订单系统的 tribunal-order-common -->
         <dependency>
             <groupId>com.demetrius</groupId>
             <artifactId>tribunal-finance-settlement-common</artifactId>
@@ -28,6 +28,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- Kafka：订阅 order-events（PRD 4.1，Consumer Group: finance-settlement） -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>

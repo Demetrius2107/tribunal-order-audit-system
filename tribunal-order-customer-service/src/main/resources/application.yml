@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: tribunal-customer-service
+    name: tribunal-order-customer-service
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 独立库：tribunal_customer（微服务独立数据库，对照 schema.sql）

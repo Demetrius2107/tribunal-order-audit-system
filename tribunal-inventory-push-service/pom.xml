@@ -16,7 +16,7 @@
     <description>库存推送系统（上游数据集成网关：接收/清洗/转换/幂等/分发/对账）</description>
 
     <dependencies>
-        <!-- 使用本系统独立 common，不复用订单系统的 tribunal-common -->
+        <!-- 使用本系统独立 common，不复用订单系统的 tribunal-order-common -->
         <dependency>
             <groupId>com.demetrius</groupId>
             <artifactId>tribunal-inventory-push-common</artifactId>
@@ -28,6 +28,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- Kafka：向下游分发库存事件（PRD 2.4 FR-034/FR-036），MQ 模式接收上游推送（FR-002） -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
         </dependency>
         <dependency>
             <groupId>com.baomidou</groupId>

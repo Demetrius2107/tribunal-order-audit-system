@@ -10,6 +10,13 @@ spring:
     url: jdbc:mysql://localhost:3306/tribunal_finance_settlement?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # PRD 4.1：Topic order-events，Consumer Group: finance-settlement
+      group-id: finance-settlement
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
 
 mybatis-plus:
   configuration:

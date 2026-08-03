@@ -20,8 +20,8 @@
 
     <modules>
         <!-- 系统一：订单审单系统 -->
-        <module>tribunal-common</module>
-        <module>tribunal-customer-service</module>
+        <module>tribunal-order-common</module>
+        <module>tribunal-order-customer-service</module>
         <module>tribunal-order-service</module>
         <!-- 系统二：库存推送系统（上游数据集成网关，独立 common，不复用订单系统的 common） -->
         <module>tribunal-inventory-push-common</module>
@@ -51,7 +51,7 @@
             <!-- 内部模块版本管理 -->
             <dependency>
                 <groupId>com.demetrius</groupId>
-                <artifactId>tribunal-common</artifactId>
+                <artifactId>tribunal-order-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

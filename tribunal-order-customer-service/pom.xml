@@ -11,14 +11,14 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <artifactId>tribunal-customer-service</artifactId>
-    <name>tribunal-customer-service</name>
+    <artifactId>tribunal-order-customer-service</artifactId>
+    <name>tribunal-order-customer-service</name>
     <description>客户/信用领域微服务（客户聚合、信用额度）</description>
 
     <dependencies>
         <dependency>
             <groupId>com.demetrius</groupId>
-            <artifactId>tribunal-common</artifactId>
+            <artifactId>tribunal-order-common</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
