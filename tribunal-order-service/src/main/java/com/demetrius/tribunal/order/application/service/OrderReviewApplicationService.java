@@ -23,6 +23,7 @@ import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.domain.service.OrderAmountCalculator;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
+import com.demetrius.tribunal.order.domain.service.PromotionCalculator;
 import com.demetrius.tribunal.order.infrastructure.event.OrderEventPublisher;
 import com.demetrius.tribunal.order.application.dto.OrderEventMessage;
 import org.slf4j.Logger;
@@ -80,6 +81,8 @@ public class OrderReviewApplicationService {
 
     private final OrderAmountCalculator amountCalculator;
 
+    private final PromotionCalculator promotionCalculator;
+
     private final ApplicationEventPublisher eventPublisher;
 
     private final OrderEventPublisher orderEventPublisher;
@@ -93,6 +96,7 @@ public class OrderReviewApplicationService {
                                          NotificationFeignClient notificationFeignClient,
                                          OrderReviewDomainService reviewDomainService,
                                          OrderAmountCalculator amountCalculator,
+                                         PromotionCalculator promotionCalculator,
                                          ApplicationEventPublisher eventPublisher,
                                          OrderEventPublisher orderEventPublisher) {
         this.orderRepository = orderRepository;
@@ -104,6 +108,7 @@ public class OrderReviewApplicationService {
         this.notificationFeignClient = notificationFeignClient;
         this.reviewDomainService = reviewDomainService;
         this.amountCalculator = amountCalculator;
+        this.promotionCalculator = promotionCalculator;
         this.eventPublisher = eventPublisher;
         this.orderEventPublisher = orderEventPublisher;
     }
@@ -151,6 +156,10 @@ public class OrderReviewApplicationService {
             priceBySku.put(sku.getSkuCode(), quote.price());
         }
         amountCalculator.reprice(order, priceBySku);
+
+        // ①' 促销折扣计算（F-202）：命中客户/客户组型促销的 SKU 按行算折扣
+        // 基建说明：促销规则来源为 marketing-service（后续提供促销接口），当前骨架由应用层传入空规则
+        promotionCalculator.applyPromotions(order, List.of(), order.getCustomerId(), null);
 
         // ② 信用校验（基于重算后的应付金额，跨服务 DTO 边界）
         CustomerCreditDto credit = customerFeignClient.getCustomerCredit(order.getCustomerId());

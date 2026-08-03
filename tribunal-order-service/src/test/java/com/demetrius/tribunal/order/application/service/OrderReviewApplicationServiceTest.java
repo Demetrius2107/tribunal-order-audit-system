@@ -17,6 +17,7 @@ import com.demetrius.tribunal.order.domain.model.OrderStatus;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.domain.service.OrderAmountCalculator;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
+import com.demetrius.tribunal.order.domain.service.PromotionCalculator;
 import com.demetrius.tribunal.order.infrastructure.event.OrderEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -65,13 +66,14 @@ class OrderReviewApplicationServiceTest {
     private OrderReviewApplicationService service;
     private final OrderAmountCalculator amountCalculator = new OrderAmountCalculator();
     private final OrderReviewDomainService reviewDomainService = new OrderReviewDomainService();
+    private final PromotionCalculator promotionCalculator = new PromotionCalculator();
 
     @BeforeEach
     void setUp() {
         service = new OrderReviewApplicationService(
                 orderRepository, customerFeignClient, marketingFeignClient,
                 inventoryFeignClient, billingFeignClient, fulfillmentFeignClient,
-                notificationFeignClient, reviewDomainService, amountCalculator,
+                notificationFeignClient, reviewDomainService, amountCalculator, promotionCalculator,
                 eventPublisher, orderEventPublisher);
     }
 

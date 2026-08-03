@@ -7,10 +7,12 @@ import com.demetrius.tribunal.order.application.dto.OrderReviewCommand;
 import com.demetrius.tribunal.order.application.service.OrderApplicationService;
 import com.demetrius.tribunal.order.application.service.OrderReviewApplicationService;
 import com.demetrius.tribunal.order.interfaces.dto.OrderCreateRequest;
+import com.demetrius.tribunal.order.interfaces.dto.OrderModifyRequest;
 import com.demetrius.tribunal.order.interfaces.dto.OrderReviewRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -59,7 +61,8 @@ public class OrderController {
                 request.skus().stream()
                         .map(s -> new OrderCreateCommand.SkuItem(
                                 s.skuCode(), s.skuName(), s.quantity(), s.price()))
-                        .toList());
+                        .toList(),
+                request.palletSpecs());
         return orderApplicationService.createOrder(command);
     }
 
@@ -91,6 +94,19 @@ public class OrderController {
         OrderReviewCommand command = new OrderReviewCommand(
                 orderId, request.approved(), request.reason(), request.operator());
         return reviewApplicationService.review(command);
+    }
+
+    /**
+     * 修改订单：PUT /api/orders/{orderId}（F-309，仅待确认状态可改，替换明细并重算金额）
+     */
+    @PutMapping("/{orderId}")
+    public OrderResult modify(@PathVariable String orderId,
+                              @Valid @RequestBody OrderModifyRequest request) {
+        List<OrderCreateCommand.SkuItem> items = request.skus().stream()
+                .map(s -> new OrderCreateCommand.SkuItem(
+                        s.skuCode(), s.skuName(), s.quantity(), s.price()))
+                .toList();
+        return orderApplicationService.modifyOrder(orderId, items, request.palletSpecs());
     }
 
     /**

@@ -55,4 +55,42 @@ class OrderAmountTest {
         order.recalculateAmounts();
         assertEquals(0, BigDecimal.valueOf(600).compareTo(order.getTotalAmount()));
     }
+
+    @Test
+    @DisplayName("折扣池抵扣：应付金额 = 总金额 - 折扣 - 折扣池抵扣")
+    void shouldApplyDiscountPoolDeduction() {
+        Order order = newOrder(); // 总金额 500
+        order.applyDiscount(BigDecimal.valueOf(100));
+        order.applyDiscountPoolDeduction(BigDecimal.valueOf(50));
+        assertEquals(0, BigDecimal.valueOf(350).compareTo(order.getPayableAmount()));
+    }
+
+    @Test
+    @DisplayName("押金与税：应付金额 = 总金额 - 折扣 + 押金 + 税")
+    void shouldApplyDepositAndTax() {
+        Order order = newOrder(); // 总金额 500
+        order.applyDiscount(BigDecimal.valueOf(100));
+        order.applyDeposit(BigDecimal.valueOf(50));
+        order.applyTax(BigDecimal.valueOf(30));
+        // 500 - 100 + 50 + 30 = 480
+        assertEquals(0, BigDecimal.valueOf(480).compareTo(order.getPayableAmount()));
+    }
+
+    @Test
+    @DisplayName("折扣池抵扣为负拒绝")
+    void shouldRejectNegativeDeduction() {
+        Order order = newOrder();
+        assertThrows(IllegalArgumentException.class,
+                () -> order.applyDiscountPoolDeduction(BigDecimal.valueOf(-1)));
+    }
+
+    @Test
+    @DisplayName("折扣+折扣池抵扣超过总金额拒绝（应付为负）")
+    void shouldRejectDeductionOverTotal() {
+        Order order = newOrder(); // 总金额 500
+        assertThrows(IllegalArgumentException.class, () -> {
+            order.applyDiscount(BigDecimal.valueOf(400));
+            order.applyDiscountPoolDeduction(BigDecimal.valueOf(200)); // 500-400-200 < 0
+        });
+    }
 }

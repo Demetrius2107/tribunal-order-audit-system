@@ -38,6 +38,15 @@ public class OrderPo {
 
     private BigDecimal discountAmount;
 
+    /** 折扣池抵扣 */
+    private BigDecimal discountPoolDeduction;
+
+    /** 押金 */
+    private BigDecimal depositAmount;
+
+    /** 税费 */
+    private BigDecimal taxAmount;
+
     private BigDecimal payableAmount;
 
     private String rejectReason;

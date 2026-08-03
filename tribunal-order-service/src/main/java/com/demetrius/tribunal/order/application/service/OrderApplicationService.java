@@ -12,6 +12,7 @@ import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
+import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
 import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.infrastructure.idempotency.OrderIdempotencyGuard;
@@ -24,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
@@ -58,17 +60,21 @@ public class OrderApplicationService {
 
     private final InventoryFeignClient inventoryFeignClient;
 
+    private final OrderReviewDomainService reviewDomainService;
+
     private final OrderIdempotencyGuard idempotencyGuard;
 
     public OrderApplicationService(OrderRepository orderRepository,
                                    ApplicationEventPublisher eventPublisher,
                                    CustomerFeignClient customerFeignClient,
                                    InventoryFeignClient inventoryFeignClient,
+                                   OrderReviewDomainService reviewDomainService,
                                    OrderIdempotencyGuard idempotencyGuard) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.customerFeignClient = customerFeignClient;
         this.inventoryFeignClient = inventoryFeignClient;
+        this.reviewDomainService = reviewDomainService;
         this.idempotencyGuard = idempotencyGuard;
     }
 
@@ -97,6 +103,9 @@ public class OrderApplicationService {
         idempotencyGuard.checkDuplicate(command.customerId(), skus);
 
         Order order = Order.create(new OrderId(orderIdValue), orderNo, command.customerId(), skus);
+
+        // 整托校验：SKU 数量必须是整托规格的倍数（业务文档五节 F-302，规格来自 SKU 主数据）
+        reviewDomainService.validateWholePallet(order, command.palletSpecs());
 
         // 下单即占用信用（信用是 customer 领域的动作，走 customer-service 接口）
         customerFeignClient.occupyCredit(order.getCustomerId(),
@@ -127,6 +136,40 @@ public class OrderApplicationService {
                 new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
 
         order.cancel();
+        orderRepository.save(order);
+        return OrderResult.from(order);
+    }
+
+    /**
+     * 修改订单（F-309 改单）：仅待确认状态允许，替换明细 + 重算金额 + 整托校验。
+     *
+     * <p>金额变化后按差额调整信用预占：应付增加则补占用，减少则释放（F-403 保持一致）。</p>
+     */
+    @Transactional
+    public OrderResult modifyOrder(String orderId, List<OrderCreateCommand.SkuItem> skuItems,
+                                   Map<String, BigDecimal> palletSpecs) {
+        Order order = orderRepository.findById(new OrderId(orderId))
+                .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
+
+        BigDecimal beforePayable = order.getPayableAmount();
+
+        List<OrderSku> newSkus = skuItems.stream()
+                .map(s -> new OrderSku(s.skuCode(), s.skuName(), s.quantity(), s.price()))
+                .toList();
+        order.modifySkus(newSkus);
+        // 改单后的明细同样要过整托校验（业务文档五节）
+        reviewDomainService.validateWholePallet(order, palletSpecs);
+
+        // 信用预占按差额调整（改单后应付变化）
+        BigDecimal delta = order.getPayableAmount().subtract(beforePayable);
+        if (delta.compareTo(BigDecimal.ZERO) > 0) {
+            customerFeignClient.occupyCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(delta));
+        } else if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(delta.abs()));
+        }
+
         orderRepository.save(order);
         return OrderResult.from(order);
     }

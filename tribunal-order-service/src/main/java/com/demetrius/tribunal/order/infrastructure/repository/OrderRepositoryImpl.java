@@ -119,6 +119,9 @@ public class OrderRepositoryImpl implements OrderRepository {
                 OrderStatus.valueOf(po.getStatus()),
                 po.getTotalAmount(),
                 po.getDiscountAmount(),
+                po.getDiscountPoolDeduction(),
+                po.getDepositAmount(),
+                po.getTaxAmount(),
                 po.getPayableAmount(),
                 po.getRejectReason(),
                 po.getCreateTime(),
@@ -133,6 +136,9 @@ public class OrderRepositoryImpl implements OrderRepository {
         po.setStatus(order.getStatus().name());
         po.setTotalAmount(order.getTotalAmount());
         po.setDiscountAmount(order.getDiscountAmount());
+        po.setDiscountPoolDeduction(order.getDiscountPoolDeduction());
+        po.setDepositAmount(order.getDepositAmount());
+        po.setTaxAmount(order.getTaxAmount());
         po.setPayableAmount(order.getPayableAmount());
         po.setRejectReason(order.getRejectReason());
         po.setCreateTime(order.getCreateTime());

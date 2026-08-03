@@ -13,10 +13,10 @@ import java.util.Map;
  * <p>对应 F-202（促销计算）/F-102（价格体系）：金额计算规则内聚在此，
  * 不在 Order 聚合或应用服务里散落 BigDecimal 运算。</p>
  *
- * <p>当前规则（基础版）：</p>
+ * <p>金额规则（业务文档三、四节）：</p>
  * <ul>
  *   <li>总金额 = Σ(明细数量 × 单价)</li>
- *   <li>应付金额 = 总金额 - 折扣金额（折扣/促销/运费/税后续按规则引擎扩展）</li>
+ *   <li>应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税</li>
  * </ul>
  */
 public class OrderAmountCalculator {
@@ -31,12 +31,26 @@ public class OrderAmountCalculator {
     }
 
     /**
-     * 计算应付金额 = 总金额 - 折扣金额。
+     * 计算应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税（业务文档三、四节）。
      *
-     * <p>折扣金额来自促销/优惠规则（F-202），当前骨架为 0，后续接入营销计算。</p>
+     * @param discountAmount     促销/折扣金额
+     * @param discountPoolDeduction 折扣池抵扣金额（用折扣池余额冲抵应付）
+     * @param depositAmount      包装物押金
+     * @param taxAmount          税费
      */
-    public BigDecimal payableAmount(BigDecimal totalAmount, BigDecimal discountAmount) {
-        return totalAmount.subtract(discountAmount == null ? BigDecimal.ZERO : discountAmount);
+    public BigDecimal payableAmount(BigDecimal totalAmount, BigDecimal discountAmount,
+                                    BigDecimal discountPoolDeduction, BigDecimal depositAmount,
+                                    BigDecimal taxAmount) {
+        return totalAmount
+                .subtract(nz(discountAmount))
+                .subtract(nz(discountPoolDeduction))
+                .add(nz(depositAmount))
+                .add(nz(taxAmount));
+    }
+
+    /** null 安全：空值按 0 处理 */
+    private static BigDecimal nz(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 
     /**

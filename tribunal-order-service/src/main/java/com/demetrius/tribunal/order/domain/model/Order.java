@@ -39,6 +39,15 @@ public class Order {
 
     private BigDecimal discountAmount;
 
+    /** 折扣池抵扣（业务文档三节：用折扣池余额冲抵应付金额） */
+    private BigDecimal discountPoolDeduction;
+
+    /** 押金（业务文档四节：包装物押金，按 SKU-客户押金配置计算） */
+    private BigDecimal depositAmount;
+
+    /** 税费（业务文档四节：与折扣、押金并列参与金额汇总） */
+    private BigDecimal taxAmount;
+
     private BigDecimal payableAmount;
 
     /** 拒绝原因（审单拒绝时记录，参照通用做法 */
@@ -56,11 +65,13 @@ public class Order {
         this.status = OrderStatus.TO_BE_CONFIRMED;
         this.createTime = LocalDateTime.now();
         this.updateTime = this.createTime;
-        // TODO（学习任务）：初始化金额计算（可抽取到 OrderAmountCalculator 领域服务）
         this.totalAmount = skus.stream()
                 .map(OrderSku::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         this.discountAmount = BigDecimal.ZERO;
+        this.discountPoolDeduction = BigDecimal.ZERO;
+        this.depositAmount = BigDecimal.ZERO;
+        this.taxAmount = BigDecimal.ZERO;
         this.payableAmount = this.totalAmount;
     }
 
@@ -69,6 +80,7 @@ public class Order {
      */
     private Order(OrderId id, String orderNo, String customerId, List<OrderSku> skus,
                   OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
+                  BigDecimal discountPoolDeduction, BigDecimal depositAmount, BigDecimal taxAmount,
                   BigDecimal payableAmount, String rejectReason,
                   LocalDateTime createTime, LocalDateTime updateTime) {
         this.id = id;
@@ -78,6 +90,9 @@ public class Order {
         this.status = status;
         this.totalAmount = totalAmount;
         this.discountAmount = discountAmount;
+        this.discountPoolDeduction = discountPoolDeduction;
+        this.depositAmount = depositAmount;
+        this.taxAmount = taxAmount;
         this.payableAmount = payableAmount;
         this.rejectReason = rejectReason;
         this.createTime = createTime;
@@ -116,9 +131,11 @@ public class Order {
      */
     public static Order restore(OrderId id, String orderNo, String customerId, List<OrderSku> skus,
                                 OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
+                                BigDecimal discountPoolDeduction, BigDecimal depositAmount, BigDecimal taxAmount,
                                 BigDecimal payableAmount, String rejectReason,
                                 LocalDateTime createTime, LocalDateTime updateTime) {
         return new Order(id, orderNo, customerId, skus, status, totalAmount, discountAmount,
+                discountPoolDeduction, depositAmount, taxAmount,
                 payableAmount, rejectReason, createTime, updateTime);
     }
 
@@ -128,16 +145,40 @@ public class Order {
     }
 
     /**
+     * 修改订单明细（F-309 改单）：仅待确认状态允许修改，修改后重算金额。
+     *
+     * @param newSkus 新的订单明细
+     */
+    public void modifySkus(List<OrderSku> newSkus) {
+        if (status != OrderStatus.TO_BE_CONFIRMED) {
+            throw new IllegalStateException("仅待确认状态的订单允许修改，当前状态: " + status);
+        }
+        if (newSkus == null || newSkus.isEmpty()) {
+            throw new IllegalArgumentException("订单明细不能为空");
+        }
+        this.skus.clear();
+        this.skus.addAll(newSkus);
+        this.updateTime = LocalDateTime.now();
+        recalculateAmounts();
+    }
+
+    /**
      * 重算订单金额（明细重新定价后调用，金额规则集中在 OrderAmountCalculator）。
      *
-     * <p>总金额 = Σ明细金额；应付金额 = 总金额 - 折扣金额。</p>
+     * <p>业务文档三/四节：应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税。</p>
      */
     public void recalculateAmounts() {
         this.totalAmount = skus.stream()
                 .map(OrderSku::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
-        this.payableAmount = this.totalAmount.subtract(this.discountAmount == null
-                ? BigDecimal.ZERO : this.discountAmount);
+        this.payableAmount = this.totalAmount
+                .subtract(nz(discountAmount))
+                .subtract(nz(discountPoolDeduction))
+                .add(nz(depositAmount))
+                .add(nz(taxAmount));
+        if (this.payableAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("订单应付金额不能为负（折扣/折扣池抵扣过大）");
+        }
     }
 
     /**
@@ -152,6 +193,38 @@ public class Order {
         if (this.payableAmount.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("折扣金额不能超过订单总金额");
         }
+    }
+
+    /** 应用折扣池抵扣（业务文档三节：用折扣池余额冲抵应付金额） */
+    public void applyDiscountPoolDeduction(BigDecimal deduction) {
+        if (deduction == null || deduction.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("折扣池抵扣金额不能为负");
+        }
+        this.discountPoolDeduction = deduction;
+        recalculateAmounts();
+    }
+
+    /** 应用押金（业务文档四节：包装物押金参与金额汇总） */
+    public void applyDeposit(BigDecimal deposit) {
+        if (deposit == null || deposit.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("押金金额不能为负");
+        }
+        this.depositAmount = deposit;
+        recalculateAmounts();
+    }
+
+    /** 应用税费（业务文档四节：税参与金额汇总） */
+    public void applyTax(BigDecimal tax) {
+        if (tax == null || tax.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("税费不能为负");
+        }
+        this.taxAmount = tax;
+        recalculateAmounts();
+    }
+
+    /** null 安全：空值按 0 处理 */
+    private static BigDecimal nz(BigDecimal v) {
+        return v == null ? BigDecimal.ZERO : v;
     }
 
     /** 审单拒绝：待确认 → 已拒绝 */
@@ -230,6 +303,18 @@ public class Order {
 
     public BigDecimal getDiscountAmount() {
         return discountAmount;
+    }
+
+    public BigDecimal getDiscountPoolDeduction() {
+        return discountPoolDeduction;
+    }
+
+    public BigDecimal getDepositAmount() {
+        return depositAmount;
+    }
+
+    public BigDecimal getTaxAmount() {
+        return taxAmount;
     }
 
     public BigDecimal getPayableAmount() {
