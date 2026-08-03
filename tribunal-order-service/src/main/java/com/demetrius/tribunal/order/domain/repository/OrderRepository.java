@@ -12,7 +12,6 @@ import java.util.Optional;
  * 领域层只依赖接口，不依赖 MyBatis/JPA 等任何持久化技术。</p>
  *
  * <p>TODO（学习任务）：参照通用做法</li>
- *   <li>补充分页查询接口（参照通用做法</li>
  *   <li>思考：查询返回聚合还是返回数据对象？DDD 要求返回聚合（完整还原）</li>
  * </ul>
  */
@@ -34,6 +33,11 @@ public interface OrderRepository {
      * 按订单编号查询（业务唯一键，用于幂等判断）。
      */
     Optional<Order> findByOrderNo(String orderNo);
+
+    /**
+     * 分页查询订单列表（可按客户/状态过滤；customerId、status 为空时不参与过滤）。
+     */
+    OrderPage findPage(String customerId, String status, long pageNum, long pageSize);
 
     /**
      * 删除订单（物理删除 / 逻辑删除由实现决定，推荐逻辑删除）。

@@ -1,14 +1,21 @@
 package com.demetrius.tribunal.order.application.service;
 
 import com.demetrius.tribunal.order.application.dto.OrderCreateCommand;
+import com.demetrius.tribunal.order.application.dto.OrderPageResult;
 import com.demetrius.tribunal.order.application.dto.OrderResult;
 import com.demetrius.tribunal.order.client.CustomerFeignClient;
+import com.demetrius.tribunal.order.client.InventoryFeignClient;
+import com.demetrius.tribunal.order.client.InventoryItemResult;
 import com.demetrius.tribunal.order.domain.event.OrderCreatedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
+import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.common.exception.BizException;
+import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.order.infrastructure.idempotency.OrderIdempotencyGuard;
+import feign.FeignException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,12 +56,20 @@ public class OrderApplicationService {
 
     private final CustomerFeignClient customerFeignClient;
 
+    private final InventoryFeignClient inventoryFeignClient;
+
+    private final OrderIdempotencyGuard idempotencyGuard;
+
     public OrderApplicationService(OrderRepository orderRepository,
                                    ApplicationEventPublisher eventPublisher,
-                                   CustomerFeignClient customerFeignClient) {
+                                   CustomerFeignClient customerFeignClient,
+                                   InventoryFeignClient inventoryFeignClient,
+                                   OrderIdempotencyGuard idempotencyGuard) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.customerFeignClient = customerFeignClient;
+        this.inventoryFeignClient = inventoryFeignClient;
+        this.idempotencyGuard = idempotencyGuard;
     }
 
     /**
@@ -67,12 +82,20 @@ public class OrderApplicationService {
      */
     @Transactional
     public OrderResult createOrder(OrderCreateCommand command) {
+        // 前置校验：客户存在性 + SKU 存在性（下单前校验，避免占用信用/落库后才暴露问题）
+        validateCustomerExists(command.customerId());
+        validateSkusExist(command.skus());
+
         // 组装聚合
         String orderIdValue = generateOrderId();
         String orderNo = generateOrderNo();
         List<OrderSku> skus = command.skus().stream()
                 .map(s -> new OrderSku(s.skuCode(), s.skuName(), s.quantity(), s.price()))
                 .toList();
+
+        // 幂等防重：同客户同明细 30 秒内重复提交直接拒绝（N-405，数据库唯一键兜底）
+        idempotencyGuard.checkDuplicate(command.customerId(), skus);
+
         Order order = Order.create(new OrderId(orderIdValue), orderNo, command.customerId(), skus);
 
         // 下单即占用信用（信用是 customer 领域的动作，走 customer-service 接口）
@@ -116,6 +139,41 @@ public class OrderApplicationService {
         Order order = orderRepository.findById(new OrderId(orderId))
                 .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
         return OrderResult.from(order);
+    }
+
+    /**
+     * 分页查询订单列表（可按客户/状态过滤）。
+     */
+    @Transactional(readOnly = true)
+    public OrderPageResult listOrders(String customerId, String status, int pageNum, int pageSize) {
+        OrderPage page = orderRepository.findPage(customerId, status, pageNum, pageSize);
+        List<OrderResult> results = page.orders().stream()
+                .map(OrderResult::from)
+                .toList();
+        return OrderPageResult.of(page.total(), page.pageNum(), page.pageSize(), results);
+    }
+
+    /**
+     * 校验客户存在性（customer-service 查询信用，客户不存在时远程返回 400 → FeignException）。
+     */
+    private void validateCustomerExists(String customerId) {
+        try {
+            customerFeignClient.getCustomerCredit(customerId);
+        } catch (FeignException e) {
+            throw new BizException("200008", "客户不存在: " + customerId);
+        }
+    }
+
+    /**
+     * 校验 SKU 存在性（逐 SKU 调 inventory-service 查询物料主数据，F-101）。
+     */
+    private void validateSkusExist(List<OrderCreateCommand.SkuItem> skus) {
+        for (OrderCreateCommand.SkuItem sku : skus) {
+            ApiResponse<InventoryItemResult> resp = inventoryFeignClient.getBySkuCode(sku.skuCode());
+            if (resp == null || !resp.isSuccess() || resp.getData() == null) {
+                throw new BizException("200009", "SKU 不存在: " + sku.skuCode());
+            }
+        }
     }
 
     /**

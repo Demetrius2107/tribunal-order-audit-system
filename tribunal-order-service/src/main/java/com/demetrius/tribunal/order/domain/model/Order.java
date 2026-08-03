@@ -130,7 +130,7 @@ public class Order {
     /**
      * 重算订单金额（明细重新定价后调用，金额规则集中在 OrderAmountCalculator）。
      *
-     * <p>总金额 = Σ明细金额；应付金额 = 总金额 - 折扣金额（折扣当前为 0，后续接营销计算）。</p>
+     * <p>总金额 = Σ明细金额；应付金额 = 总金额 - 折扣金额。</p>
      */
     public void recalculateAmounts() {
         this.totalAmount = skus.stream()
@@ -138,6 +138,20 @@ public class Order {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         this.payableAmount = this.totalAmount.subtract(this.discountAmount == null
                 ? BigDecimal.ZERO : this.discountAmount);
+    }
+
+    /**
+     * 应用折扣并重算金额（F-202 促销/折扣基础版；折扣金额不得大于总金额）。
+     */
+    public void applyDiscount(BigDecimal discount) {
+        if (discount == null || discount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("折扣金额不能为负");
+        }
+        this.discountAmount = discount;
+        recalculateAmounts();
+        if (this.payableAmount.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("折扣金额不能超过订单总金额");
+        }
     }
 
     /** 审单拒绝：待确认 → 已拒绝 */

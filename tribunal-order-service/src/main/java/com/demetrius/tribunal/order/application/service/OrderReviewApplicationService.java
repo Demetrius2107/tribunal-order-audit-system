@@ -10,7 +10,9 @@ import com.demetrius.tribunal.order.client.BillTransferResult;
 import com.demetrius.tribunal.order.client.BillingFeignClient;
 import com.demetrius.tribunal.order.client.CustomerFeignClient;
 import com.demetrius.tribunal.order.client.FulfillmentFeignClient;
+import com.demetrius.tribunal.order.client.FulfillmentResult;
 import com.demetrius.tribunal.order.client.InventoryFeignClient;
+import com.demetrius.tribunal.order.client.InventoryItemResult;
 import com.demetrius.tribunal.order.client.MarketingFeignClient;
 import com.demetrius.tribunal.order.client.NotificationFeignClient;
 import com.demetrius.tribunal.order.client.PriceQuoteResult;
@@ -23,12 +25,15 @@ import com.demetrius.tribunal.order.domain.service.OrderAmountCalculator;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
 import com.demetrius.tribunal.order.infrastructure.event.OrderEventPublisher;
 import com.demetrius.tribunal.order.application.dto.OrderEventMessage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +59,8 @@ import java.util.UUID;
  */
 @Service
 public class OrderReviewApplicationService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderReviewApplicationService.class);
 
     private final OrderRepository orderRepository;
 
@@ -149,33 +156,49 @@ public class OrderReviewApplicationService {
         CustomerCreditDto credit = customerFeignClient.getCustomerCredit(order.getCustomerId());
         reviewDomainService.validateForReview(order, credit, operator);
 
-        // ③ 预占库存（逐 SKU 调 inventory-service；TODO：失败处理/整体回滚）
-        for (OrderSku sku : order.getSkus()) {
-            inventoryFeignClient.reserve(sku.getSkuCode(), sku.getQuantity());
+        // ③~⑥ 跨服务编排：预占库存 → 生成账单 → 创建履约 → 发送通知
+        // 远程副作用不会随本地事务回滚，任一失败必须补偿已预占的库存（F-503 一致性的骨架保障）
+        List<String> reservedSkus = new ArrayList<>();
+        try {
+            for (OrderSku sku : order.getSkus()) {
+                ApiResponse<InventoryItemResult> resp =
+                        inventoryFeignClient.reserve(sku.getSkuCode(), sku.getQuantity());
+                checkFeignSuccess(resp, "库存预占失败: " + sku.getSkuCode());
+                reservedSkus.add(sku.getSkuCode());
+            }
+
+            ApiResponse<BillTransferResult> billResponse = billingFeignClient.transfer(new BillTransferRequest(
+                    order.getOrderNo(),
+                    order.getCustomerId(),
+                    order.getSkus().stream()
+                            .map(s -> new BillTransferRequest.BillTransferLine(
+                                    s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
+                            .toList()));
+            checkFeignSuccess(billResponse, "账单生成失败");
+
+            ApiResponse<FulfillmentResult> fulfillmentResponse =
+                    fulfillmentFeignClient.create(new FulfillmentFeignClient.FulfillmentCreateRequest(
+                            order.getOrderNo(),
+                            order.getCustomerId(),
+                            order.getSkus().stream()
+                                    .map(s -> new FulfillmentFeignClient.FulfillmentCreateRequest.FulfillmentLineItem(
+                                            s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
+                                    .toList()));
+            checkFeignSuccess(fulfillmentResponse, "履约创建失败");
+
+            ApiResponse<Void> notificationResponse =
+                    notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
+                            "SITE_MESSAGE", order.getCustomerId(), "订单已确认",
+                            "您的订单 " + order.getOrderNo() + " 已通过审单"));
+            checkFeignSuccess(notificationResponse, "通知发送失败");
+        } catch (BizException e) {
+            // 补偿：回滚本次已预占的库存；信用预占保留（订单仍为待确认，拒绝/取消时才释放）
+            compensateReserved(reservedSkus, order);
+            throw e;
+        } catch (Exception e) {
+            compensateReserved(reservedSkus, order);
+            throw new BizException("200006", "审单跨服务编排失败: " + e.getMessage());
         }
-
-        // ④ 生成账单（转单到 billing-service；TODO：失败处理）
-        ApiResponse<BillTransferResult> billResponse = billingFeignClient.transfer(new BillTransferRequest(
-                order.getOrderNo(),
-                order.getCustomerId(),
-                order.getSkus().stream()
-                        .map(s -> new BillTransferRequest.BillTransferLine(
-                                s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
-                        .toList()));
-
-        // ⑤ 创建履约（fulfillment-service；TODO：失败处理）
-        fulfillmentFeignClient.create(new FulfillmentFeignClient.FulfillmentCreateRequest(
-                order.getOrderNo(),
-                order.getCustomerId(),
-                order.getSkus().stream()
-                        .map(s -> new FulfillmentFeignClient.FulfillmentCreateRequest.FulfillmentLineItem(
-                                s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
-                        .toList()));
-
-        // ⑥ 发送通知（notification-service；TODO：通知模板/接收人规则）
-        notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
-                "SITE_MESSAGE", order.getCustomerId(), "订单已确认",
-                "您的订单 " + order.getOrderNo() + " 已通过审单"));
 
         // ⑦ 状态迁移（聚合内部校验，非法迁移抛异常）
         OrderStatusChangedEvent event = new OrderStatusChangedEvent(
@@ -190,6 +213,32 @@ public class OrderReviewApplicationService {
 
         // ⑧ 发布订单确认事件到 Kafka（下游金融结算系统订阅生成结算单，对应 PRD 4.1）
         orderEventPublisher.publishOrderEvent(buildApprovedEvent(order));
+    }
+
+    /**
+     * 校验 Feign 统一响应：success 为 false 时抛业务异常（避免"响应失败还继续编排"）。
+     */
+    private <T> void checkFeignSuccess(ApiResponse<T> resp, String failMessage) {
+        if (resp == null || !resp.isSuccess()) {
+            String detail = resp == null ? "响应为空" : resp.getMessage();
+            throw new BizException("200006", failMessage + "：" + detail);
+        }
+    }
+
+    /**
+     * 补偿：释放本次已预占的库存（远程副作用回滚，逐 SKU release）。
+     */
+    private void compensateReserved(List<String> reservedSkus, Order order) {
+        for (OrderSku sku : order.getSkus()) {
+            if (reservedSkus.contains(sku.getSkuCode())) {
+                try {
+                    inventoryFeignClient.release(sku.getSkuCode(), sku.getQuantity());
+                } catch (Exception ex) {
+                    // 补偿失败记录日志，交由对账任务兜底（F-504 库存变动流水/对账）
+                    log.error("审单失败后库存补偿失败 skuCode={}", sku.getSkuCode(), ex);
+                }
+            }
+        }
     }
 
     /**

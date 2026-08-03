@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.order.interfaces.controller;
 
 import com.demetrius.tribunal.order.application.dto.OrderCreateCommand;
+import com.demetrius.tribunal.order.application.dto.OrderPageResult;
 import com.demetrius.tribunal.order.application.dto.OrderResult;
 import com.demetrius.tribunal.order.application.dto.OrderReviewCommand;
 import com.demetrius.tribunal.order.application.service.OrderApplicationService;
@@ -68,6 +69,17 @@ public class OrderController {
     @GetMapping("/{orderId}")
     public OrderResult get(@PathVariable String orderId) {
         return orderApplicationService.getOrder(orderId);
+    }
+
+    /**
+     * 分页查询订单列表：GET /api/orders?customerId=&status=&pageNum=1&pageSize=10
+     */
+    @GetMapping
+    public OrderPageResult list(@RequestParam(required = false) String customerId,
+                                @RequestParam(required = false) String status,
+                                @RequestParam(defaultValue = "1") int pageNum,
+                                @RequestParam(defaultValue = "10") int pageSize) {
+        return orderApplicationService.listOrders(customerId, status, pageNum, pageSize);
     }
 
     /**

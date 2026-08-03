@@ -1,10 +1,12 @@
 package com.demetrius.tribunal.order.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.model.OrderStatus;
+import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.infrastructure.mapper.OrderMapper;
 import com.demetrius.tribunal.order.infrastructure.mapper.OrderSkuMapper;
@@ -16,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 订单仓储实现（infrastructure 层，MyBatis-Plus）。
@@ -74,6 +77,24 @@ public class OrderRepositoryImpl implements OrderRepository {
         OrderPo po = orderMapper.selectOne(
                 new LambdaQueryWrapper<OrderPo>().eq(OrderPo::getOrderNo, orderNo));
         return po == null ? Optional.empty() : Optional.of(toDomain(po));
+    }
+
+    @Override
+    public OrderPage findPage(String customerId, String status, long pageNum, long pageSize) {
+        LambdaQueryWrapper<OrderPo> wrapper = new LambdaQueryWrapper<>();
+        if (customerId != null && !customerId.isBlank()) {
+            wrapper.eq(OrderPo::getCustomerId, customerId);
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(OrderPo::getStatus, status);
+        }
+        wrapper.orderByDesc(OrderPo::getCreateTime);
+
+        Page<OrderPo> page = orderMapper.selectPage(new Page<>(pageNum, pageSize), wrapper);
+        List<Order> orders = page.getRecords().stream()
+                .map(this::toDomain)
+                .collect(Collectors.toList());
+        return OrderPage.of(page.getTotal(), pageNum, pageSize, orders);
     }
 
     @Override
