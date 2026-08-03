@@ -30,10 +30,22 @@ public class Order {
 
     private final String customerId;
 
+    /** 订单类型（普通/预购，业务文档七节） */
+    private final OrderType orderType;
+
+    /** 是否拼车订单（业务文档八节：whether_the_car_pool，多经销商合并一车运输） */
+    private boolean carPooling;
+
+    /** 是否已参与拼车（拼车组确认后置 true；已拼车订单不可关闭，CARPOOL_CANNOT_BE_CLOSED） */
+    private boolean carPoolJoined;
+
     private OrderStatus status;
 
     /** 订单明细（聚合内实体） */
     private final List<OrderSku> skus;
+
+    /** 空包装回收明细（业务文档九节：可包含回收明细，参与押金计算） */
+    private final List<ReturnablePackaging> returnablePackagings;
 
     private BigDecimal totalAmount;
 
@@ -57,28 +69,12 @@ public class Order {
 
     private LocalDateTime updateTime;
 
-    private Order(OrderId id, String orderNo, String customerId, List<OrderSku> skus) {
-        this.id = id;
-        this.orderNo = orderNo;
-        this.customerId = customerId;
-        this.skus = skus;
-        this.status = OrderStatus.TO_BE_CONFIRMED;
-        this.createTime = LocalDateTime.now();
-        this.updateTime = this.createTime;
-        this.totalAmount = skus.stream()
-                .map(OrderSku::getAmount)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        this.discountAmount = BigDecimal.ZERO;
-        this.discountPoolDeduction = BigDecimal.ZERO;
-        this.depositAmount = BigDecimal.ZERO;
-        this.taxAmount = BigDecimal.ZERO;
-        this.payableAmount = this.totalAmount;
-    }
-
     /**
      * 还原构造器：从持久化数据完整还原聚合（由 restore() 调用）。
      */
-    private Order(OrderId id, String orderNo, String customerId, List<OrderSku> skus,
+    private Order(OrderId id, String orderNo, String customerId, OrderType orderType,
+                  boolean carPooling, boolean carPoolJoined, List<OrderSku> skus,
+                  List<ReturnablePackaging> returnablePackagings,
                   OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
                   BigDecimal discountPoolDeduction, BigDecimal depositAmount, BigDecimal taxAmount,
                   BigDecimal payableAmount, String rejectReason,
@@ -86,7 +82,11 @@ public class Order {
         this.id = id;
         this.orderNo = orderNo;
         this.customerId = customerId;
+        this.orderType = orderType;
+        this.carPooling = carPooling;
+        this.carPoolJoined = carPoolJoined;
         this.skus = skus;
+        this.returnablePackagings = returnablePackagings;
         this.status = status;
         this.totalAmount = totalAmount;
         this.discountAmount = discountAmount;
@@ -100,7 +100,7 @@ public class Order {
     }
 
     /**
-     * 工厂方法：创建订单（初始状态 = 待确认）。
+     * 工厂方法：创建订单（初始状态 = 待确认，默认普通订单）。
      *
      * @param id         订单 ID
      * @param orderNo    订单编号
@@ -109,32 +109,57 @@ public class Order {
      * @return 新订单聚合
      */
     public static Order create(OrderId id, String orderNo, String customerId, List<OrderSku> skus) {
+        return create(id, orderNo, customerId, OrderType.NORMAL, false, skus);
+    }
+
+    /**
+     * 工厂方法：创建订单（初始状态 = 待确认，默认普通订单，可带空包装回收明细）。
+     */
+    public static Order create(OrderId id, String orderNo, String customerId,
+                               OrderType orderType, boolean carPooling, List<OrderSku> skus) {
+        return create(id, orderNo, customerId, orderType, carPooling, skus, List.of());
+    }
+
+    /**
+     * 工厂方法：创建订单（初始状态 = 待确认，可指定订单类型/拼车/回收明细）。
+     */
+    public static Order create(OrderId id, String orderNo, String customerId,
+                               OrderType orderType, boolean carPooling, List<OrderSku> skus,
+                               List<ReturnablePackaging> returnablePackagings) {
         if (skus == null || skus.isEmpty()) {
             throw new IllegalArgumentException("订单明细不能为空");
         }
-        return new Order(id, orderNo, customerId, new ArrayList<>(skus));
+        List<ReturnablePackaging> rps = returnablePackagings == null
+                ? new ArrayList<>() : new ArrayList<>(returnablePackagings);
+        BigDecimal total = skus.stream()
+                .map(OrderSku::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        // 应付金额 = 商品总额 + 空包装回收押金（业务文档九节）
+        BigDecimal returnableDeposit = rps.stream()
+                .map(ReturnablePackaging::getDepositAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal payable = total.add(returnableDeposit);
+        LocalDateTime now = LocalDateTime.now();
+        return new Order(id, orderNo, customerId, orderType, carPooling, false,
+                new ArrayList<>(skus), rps,
+                OrderStatus.TO_BE_CONFIRMED,
+                total, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
+                payable, null, now, now);
     }
 
     /**
      * 还原工厂方法：从持久化数据完整还原聚合（仓储读取时使用）。
-     *
-     * <p>与 create() 的区别：create 用于新订单（初始状态待确认、金额由 SKU 计算），
-     * restore 用于还原已有订单（状态/金额/时间戳均来自数据库，不做任何重算）。</p>
-     *
-     * @param status         已持久化的状态
-     * @param totalAmount    已持久化的总金额
-     * @param discountAmount 已持久化的折扣金额
-     * @param payableAmount  已持久化的应付金额
-     * @param rejectReason   拒绝原因（可能为 null）
-     * @param createTime     创建时间
-     * @param updateTime     更新时间
      */
-    public static Order restore(OrderId id, String orderNo, String customerId, List<OrderSku> skus,
+    public static Order restore(OrderId id, String orderNo, String customerId, OrderType orderType,
+                                boolean carPooling, boolean carPoolJoined, List<OrderSku> skus,
+                                List<ReturnablePackaging> returnablePackagings,
                                 OrderStatus status, BigDecimal totalAmount, BigDecimal discountAmount,
                                 BigDecimal discountPoolDeduction, BigDecimal depositAmount, BigDecimal taxAmount,
                                 BigDecimal payableAmount, String rejectReason,
                                 LocalDateTime createTime, LocalDateTime updateTime) {
-        return new Order(id, orderNo, customerId, skus, status, totalAmount, discountAmount,
+        return new Order(id, orderNo, customerId, orderType, carPooling, carPoolJoined,
+                skus, returnablePackagings,
+                status, totalAmount, discountAmount,
                 discountPoolDeduction, depositAmount, taxAmount,
                 payableAmount, rejectReason, createTime, updateTime);
     }
@@ -165,17 +190,21 @@ public class Order {
     /**
      * 重算订单金额（明细重新定价后调用，金额规则集中在 OrderAmountCalculator）。
      *
-     * <p>业务文档三/四节：应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税。</p>
+     * <p>业务文档三/四/九节：应付金额 = 总金额 - 折扣 - 折扣池抵扣 + 押金 + 税 + 空包装回收押金。</p>
      */
     public void recalculateAmounts() {
         this.totalAmount = skus.stream()
                 .map(OrderSku::getAmount)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal returnableDeposit = returnablePackagings.stream()
+                .map(ReturnablePackaging::getDepositAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
         this.payableAmount = this.totalAmount
                 .subtract(nz(discountAmount))
                 .subtract(nz(discountPoolDeduction))
                 .add(nz(depositAmount))
-                .add(nz(taxAmount));
+                .add(nz(taxAmount))
+                .add(returnableDeposit);
         if (this.payableAmount.compareTo(BigDecimal.ZERO) < 0) {
             throw new IllegalArgumentException("订单应付金额不能为负（折扣/折扣池抵扣过大）");
         }
@@ -253,9 +282,26 @@ public class Order {
         transitTo(OrderStatus.SIGNED);
     }
 
-    /** 取消订单 */
+    /** 取消订单（预购单走专用终态 PRE_ORDER_ENDED，业务文档七节：998 预购已结束） */
     public void cancel() {
-        transitTo(OrderStatus.CANCELLED);
+        // 已参与拼车的订单不可关闭（业务文档八节：CARPOOL_CANNOT_BE_CLOSED）
+        if (carPoolJoined) {
+            throw new IllegalStateException("已参与拼车的订单不可关闭（CARPOOL_CANNOT_BE_CLOSED）");
+        }
+        if (orderType == OrderType.PRE_ORDER) {
+            transitTo(OrderStatus.PRE_ORDER_ENDED);
+        } else {
+            transitTo(OrderStatus.CANCELLED);
+        }
+    }
+
+    /** 标记参与拼车（拼车组确认后调用；仅拼车订单可加入） */
+    public void joinCarPool() {
+        if (!carPooling) {
+            throw new IllegalStateException("非拼车订单不能参与拼车");
+        }
+        this.carPoolJoined = true;
+        this.updateTime = LocalDateTime.now();
     }
 
     /**
@@ -289,12 +335,42 @@ public class Order {
         return customerId;
     }
 
+    public OrderType getOrderType() {
+        return orderType;
+    }
+
+    /** 是否预购订单（预购单走独立终态与信用口径，业务文档七节） */
+    public boolean isPreOrder() {
+        return orderType == OrderType.PRE_ORDER;
+    }
+
+    /** 是否拼车订单（业务文档八节） */
+    public boolean isCarPooling() {
+        return carPooling;
+    }
+
+    /** 是否已参与拼车（已拼车订单不可关闭） */
+    public boolean isCarPoolJoined() {
+        return carPoolJoined;
+    }
+
     public OrderStatus getStatus() {
         return status;
     }
 
     public List<OrderSku> getSkus() {
         return Collections.unmodifiableList(skus);
+    }
+
+    public List<ReturnablePackaging> getReturnablePackagings() {
+        return Collections.unmodifiableList(returnablePackagings);
+    }
+
+    /** 空包装回收押金合计（业务文档九节：回收参与金额/押金计算） */
+    public BigDecimal getReturnableDepositTotal() {
+        return returnablePackagings.stream()
+                .map(ReturnablePackaging::getDepositAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     public BigDecimal getTotalAmount() {

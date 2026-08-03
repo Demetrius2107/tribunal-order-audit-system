@@ -31,6 +31,15 @@ public class OrderPo {
 
     private String customerId;
 
+    /** 订单类型（NORMAL/PRE_ORDER） */
+    private String orderType;
+
+    /** 是否拼车订单 */
+    private Boolean carPooling;
+
+    /** 是否已参与拼车 */
+    private Boolean carPoolJoined;
+
     /** 状态（与 OrderStatus.name() 对应） */
     private String status;
 

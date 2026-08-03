@@ -18,6 +18,9 @@ CREATE TABLE t_order (
     id              VARCHAR(64)   NOT NULL COMMENT '主键',
     order_no        VARCHAR(64)   NOT NULL COMMENT '订单编号（业务唯一键）',
     customer_id     VARCHAR(64)   NOT NULL COMMENT '客户ID（跨服务引用 customer-service）',
+    order_type      VARCHAR(32)   NOT NULL DEFAULT 'NORMAL' COMMENT '订单类型：NORMAL普通/PRE_ORDER预购',
+    car_pooling     TINYINT       NOT NULL DEFAULT 0 COMMENT '是否拼车订单 0否1是',
+    car_pool_joined TINYINT       NOT NULL DEFAULT 0 COMMENT '是否已参与拼车 0否1是（已拼车不可关闭）',
     status          VARCHAR(32)   NOT NULL COMMENT '状态（TO_BE_CONFIRMED等）',
     total_amount    DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '总金额',
     discount_amount DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '折扣金额',
@@ -67,3 +70,21 @@ CREATE TABLE t_order_status_record (
     PRIMARY KEY (id),
     KEY idx_order (order_id)
 ) ENGINE = InnoDB COMMENT = '订单状态流水表';
+
+-- ------------------------------------------------------------
+-- 4. 空包装回收明细表（业务文档九节：经销商退回空包装物）
+--    回收明细参与订单押金计算（回收押金合计计入应付金额）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_order_returnable;
+CREATE TABLE t_order_returnable (
+    id             VARCHAR(64)   NOT NULL COMMENT '主键',
+    order_id       VARCHAR(64)   NOT NULL COMMENT '订单ID',
+    packaging_type VARCHAR(64)   NOT NULL COMMENT '包装类型编码',
+    packaging_name VARCHAR(128)  NULL COMMENT '包装类型名称',
+    quantity       DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '回收数量',
+    unit_deposit   DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '单个包装押金',
+    deposit_amount DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '押金合计（数量×单价押金）',
+    deleted        TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0否1是',
+    PRIMARY KEY (id),
+    KEY idx_order (order_id)
+) ENGINE = InnoDB COMMENT = '空包装回收明细表';

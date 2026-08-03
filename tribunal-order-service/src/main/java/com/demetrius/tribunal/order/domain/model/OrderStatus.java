@@ -29,38 +29,61 @@ import java.util.Set;
  */
 public enum OrderStatus {
 
-    /** 待确认（下单初始状态） */
+    /**
+     * 待确认（下单初始状态）
+     */
     TO_BE_CONFIRMED("待确认"),
 
-    /** 已确认（审单通过） */
+    /**
+     * 已确认（审单通过）
+     */
     CONFIRMED("已确认"),
 
-    /** 转单中（已发给 D365 / 外部系统） */
+    /**
+     * 转单中（已发给 D365 / 外部系统）
+     */
     TRANSFERRING("转单中"),
 
-    /** 已转单 */
+    /**
+     * 已转单
+     */
     TRANSFERRED("已转单"),
 
-    /** 已发货 */
+    /**
+     * 已发货
+     */
     SHIPPED("已发货"),
 
-    /** 已签收（终态） */
+    /**
+     * 已签收（终态）
+     */
     SIGNED("已签收"),
 
-    /** 已拒绝（审单拒绝，终态） */
+    /**
+     * 已拒绝（审单拒绝，终态）
+     */
     REJECTED("已拒绝"),
 
-    /** 已取消（终态） */
-    CANCELLED("已取消");
+    /**
+     * 已取消（终态）
+     */
+    CANCELLED("已取消"),
+
+    /**
+     * 预购已结束（预购单专用终态，业务文档七节：状态码 998 ORDER_STOP）
+     */
+    PRE_ORDER_ENDED("预购已结束");
 
     private final String desc;
 
-    /** 状态迁移表：当前状态 → 允许迁移的目标状态集合 */
+    /**
+     * 状态迁移表：当前状态 → 允许迁移的目标状态集合
+     */
     private static final Map<OrderStatus, Set<OrderStatus>> TRANSITIONS =
             new EnumMap<>(OrderStatus.class);
 
     static {
-        TRANSITIONS.put(TO_BE_CONFIRMED, EnumSet.of(CONFIRMED, REJECTED, CANCELLED));
+        TRANSITIONS.put(TO_BE_CONFIRMED, EnumSet.of(CONFIRMED, REJECTED, CANCELLED, PRE_ORDER_ENDED));
         TRANSITIONS.put(CONFIRMED, EnumSet.of(TRANSFERRING, CANCELLED));
         TRANSITIONS.put(TRANSFERRING, EnumSet.of(TRANSFERRED, CANCELLED));
         TRANSITIONS.put(TRANSFERRED, EnumSet.of(SHIPPED, CANCELLED));
@@ -69,6 +92,7 @@ public enum OrderStatus {
         TRANSITIONS.put(SIGNED, EnumSet.noneOf(OrderStatus.class));
         TRANSITIONS.put(REJECTED, EnumSet.noneOf(OrderStatus.class));
         TRANSITIONS.put(CANCELLED, EnumSet.noneOf(OrderStatus.class));
+        TRANSITIONS.put(PRE_ORDER_ENDED, EnumSet.noneOf(OrderStatus.class));
     }
 
     OrderStatus(String desc) {

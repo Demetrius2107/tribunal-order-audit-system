@@ -62,7 +62,13 @@ public class OrderController {
                         .map(s -> new OrderCreateCommand.SkuItem(
                                 s.skuCode(), s.skuName(), s.quantity(), s.price()))
                         .toList(),
-                request.palletSpecs());
+                request.palletSpecs(),
+                request.orderType(),
+                request.carPooling(),
+                request.returnablePackagings() == null ? List.of() : request.returnablePackagings().stream()
+                        .map(r -> new OrderCreateCommand.ReturnableItem(
+                                r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
+                        .toList());
         return orderApplicationService.createOrder(command);
     }
 

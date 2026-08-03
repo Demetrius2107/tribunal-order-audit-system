@@ -6,12 +6,16 @@ import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.model.OrderStatus;
+import com.demetrius.tribunal.order.domain.model.OrderType;
+import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.infrastructure.mapper.OrderMapper;
 import com.demetrius.tribunal.order.infrastructure.mapper.OrderSkuMapper;
+import com.demetrius.tribunal.order.infrastructure.mapper.ReturnablePackagingMapper;
 import com.demetrius.tribunal.order.infrastructure.model.OrderPo;
 import com.demetrius.tribunal.order.infrastructure.model.OrderSkuPo;
+import com.demetrius.tribunal.order.infrastructure.model.ReturnablePackagingPo;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -41,9 +45,13 @@ public class OrderRepositoryImpl implements OrderRepository {
 
     private final OrderSkuMapper orderSkuMapper;
 
-    public OrderRepositoryImpl(OrderMapper orderMapper, OrderSkuMapper orderSkuMapper) {
+    private final ReturnablePackagingMapper returnablePackagingMapper;
+
+    public OrderRepositoryImpl(OrderMapper orderMapper, OrderSkuMapper orderSkuMapper,
+                               ReturnablePackagingMapper returnablePackagingMapper) {
         this.orderMapper = orderMapper;
         this.orderSkuMapper = orderSkuMapper;
+        this.returnablePackagingMapper = returnablePackagingMapper;
     }
 
     @Override
@@ -57,12 +65,19 @@ public class OrderRepositoryImpl implements OrderRepository {
         } else {
             orderMapper.updateById(po);
         }
-        // TODO（学习任务）：明细的增量/全量更新策略（简单做法：先删后插，注意保持事务）
+        // 明细：先删后插（保持事务）
         orderSkuMapper.delete(new LambdaQueryWrapper<OrderSkuPo>()
                 .eq(OrderSkuPo::getOrderId, order.getId().value()));
         for (OrderSku sku : order.getSkus()) {
             OrderSkuPo skuPo = toSkuPo(order, sku);
             orderSkuMapper.insert(skuPo);
+        }
+        // 空包装回收明细：先删后插
+        returnablePackagingMapper.delete(new LambdaQueryWrapper<ReturnablePackagingPo>()
+                .eq(ReturnablePackagingPo::getOrderId, order.getId().value()));
+        for (ReturnablePackaging rp : order.getReturnablePackagings()) {
+            ReturnablePackagingPo rpPo = toReturnablePo(order, rp);
+            returnablePackagingMapper.insert(rpPo);
         }
     }
 
@@ -110,12 +125,21 @@ public class OrderRepositoryImpl implements OrderRepository {
         List<OrderSku> skus = skuPos.stream()
                 .map(s -> new OrderSku(s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
                 .toList();
+        List<ReturnablePackagingPo> rpPos = returnablePackagingMapper.findByOrderId(po.getId());
+        List<ReturnablePackaging> rps = rpPos.stream()
+                .map(r -> new ReturnablePackaging(
+                        r.getPackagingType(), r.getPackagingName(), r.getQuantity(), r.getUnitDeposit()))
+                .toList();
         // 完整还原聚合：状态/金额/拒绝原因/时间戳均来自数据库（restore 不做任何重算）
         return Order.restore(
                 new OrderId(po.getId()),
                 po.getOrderNo(),
                 po.getCustomerId(),
+                OrderType.valueOf(po.getOrderType()),
+                Boolean.TRUE.equals(po.getCarPooling()),
+                Boolean.TRUE.equals(po.getCarPoolJoined()),
                 skus,
+                rps,
                 OrderStatus.valueOf(po.getStatus()),
                 po.getTotalAmount(),
                 po.getDiscountAmount(),
@@ -133,6 +157,9 @@ public class OrderRepositoryImpl implements OrderRepository {
         po.setId(order.getId().value());
         po.setOrderNo(order.getOrderNo());
         po.setCustomerId(order.getCustomerId());
+        po.setOrderType(order.getOrderType().name());
+        po.setCarPooling(order.isCarPooling());
+        po.setCarPoolJoined(order.isCarPoolJoined());
         po.setStatus(order.getStatus().name());
         po.setTotalAmount(order.getTotalAmount());
         po.setDiscountAmount(order.getDiscountAmount());
@@ -155,6 +182,17 @@ public class OrderRepositoryImpl implements OrderRepository {
         po.setPrice(sku.getPrice());
         po.setAmount(sku.getAmount());
         po.setCreateTime(LocalDateTime.now());
+        return po;
+    }
+
+    private ReturnablePackagingPo toReturnablePo(Order order, ReturnablePackaging rp) {
+        ReturnablePackagingPo po = new ReturnablePackagingPo();
+        po.setOrderId(order.getId().value());
+        po.setPackagingType(rp.getPackagingType());
+        po.setPackagingName(rp.getPackagingName());
+        po.setQuantity(rp.getQuantity());
+        po.setUnitDeposit(rp.getUnitDeposit());
+        po.setDepositAmount(rp.getDepositAmount());
         return po;
     }
 }

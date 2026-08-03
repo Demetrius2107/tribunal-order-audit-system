@@ -10,6 +10,7 @@ import com.demetrius.tribunal.order.domain.event.OrderCreatedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
+import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
@@ -102,7 +103,12 @@ public class OrderApplicationService {
         // 幂等防重：同客户同明细 30 秒内重复提交直接拒绝（N-405，数据库唯一键兜底）
         idempotencyGuard.checkDuplicate(command.customerId(), skus);
 
-        Order order = Order.create(new OrderId(orderIdValue), orderNo, command.customerId(), skus);
+        Order order = Order.create(new OrderId(orderIdValue), orderNo, command.customerId(),
+                command.orderType(), command.carPooling(), skus,
+                command.returnablePackagings() == null ? List.of() : command.returnablePackagings().stream()
+                        .map(r -> new ReturnablePackaging(
+                                r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
+                        .toList());
 
         // 整托校验：SKU 数量必须是整托规格的倍数（业务文档五节 F-302，规格来自 SKU 主数据）
         reviewDomainService.validateWholePallet(order, command.palletSpecs());
