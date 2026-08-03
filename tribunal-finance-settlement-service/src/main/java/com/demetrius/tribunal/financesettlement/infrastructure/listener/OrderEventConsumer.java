@@ -42,11 +42,12 @@ public class OrderEventConsumer {
                 log.info("忽略非结算触发事件 eventType={} orderId={}", event.eventType(), event.orderId());
                 return;
             }
-            String settlementId = settlementApplicationService.createSettlement(
+            // 正向流程起点：生成结算单(PENDING) → 幂等扣款(CHARGED)（PRD 6.2）
+            var view = settlementApplicationService.createSettlementAndCharge(
                     event.orderId(), event.userId(), event.merchantId(),
                     event.netAmount(), event.paymentMethod(), event.paymentCurrency());
-            log.info("订单事件已生成结算单 settlementId={} orderId={} eventType={}",
-                    settlementId, event.orderId(), event.eventType());
+            log.info("订单事件已生成结算单并扣款 settlementId={} orderId={} status={} eventType={}",
+                    view.getSettlementId(), event.orderId(), view.getStatus(), event.eventType());
         } catch (Exception e) {
             log.error("订单事件处理失败: {}", message, e);
         }

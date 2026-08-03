@@ -2,6 +2,7 @@ package com.demetrius.tribunal.financesettlement.infrastructure.listener;
 
 import com.demetrius.tribunal.financesettlement.application.dto.OrderEventMessage;
 import com.demetrius.tribunal.financesettlement.application.service.SettlementApplicationService;
+import com.demetrius.tribunal.financesettlement.common.dto.SettlementView;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,9 +19,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
- * 订单事件消费者单元测试（OrderApproved → 结算单生成链路，PRD 4.1）。
+ * 订单事件消费者单元测试（OrderApproved → 结算单生成 + 幂等扣款链路，PRD 4.1/6.2）。
  */
 @ExtendWith(MockitoExtension.class)
 class OrderEventConsumerTest {
@@ -59,41 +61,61 @@ class OrderEventConsumerTest {
         }
     }
 
+    private SettlementView settledView() {
+        SettlementView view = new SettlementView();
+        view.setSettlementId("SET_1");
+        view.setOrderId("ORD20260803001");
+        view.setStatus("CHARGED");
+        return view;
+    }
+
     @Test
-    @DisplayName("OrderApproved 事件触发结算单生成")
-    void shouldCreateSettlementOnApproved() {
+    @DisplayName("OrderApproved 事件触发结算单生成 + 幂等扣款")
+    void shouldCreateSettlementAndChargeOnApproved() {
+        when(settlementApplicationService.createSettlementAndCharge(anyString(), anyString(), anyString(),
+                any(BigDecimal.class), anyString(), anyString()))
+                .thenReturn(settledView());
+
         consumer.onOrderEvent(eventJson("OrderApproved"));
 
-        verify(settlementApplicationService).createSettlement(
+        verify(settlementApplicationService).createSettlementAndCharge(
                 eq("ORD20260803001"), eq("USR_789"), eq("MCH_001"),
-                any(BigDecimal.class), eq("WECHAT_PAY"), eq("CNY"));
+                eq(new BigDecimal("851400")), eq("WECHAT_PAY"), eq("CNY"));
     }
 
     @Test
-    @DisplayName("OrderCompleted 事件也触发结算单生成（兼容旧事件）")
-    void shouldCreateSettlementOnCompleted() {
+    @DisplayName("OrderCompleted 事件也触发结算扣款（兼容旧事件）")
+    void shouldCreateSettlementAndChargeOnCompleted() {
+        when(settlementApplicationService.createSettlementAndCharge(anyString(), anyString(), anyString(),
+                any(BigDecimal.class), anyString(), anyString()))
+                .thenReturn(settledView());
+
         consumer.onOrderEvent(eventJson("OrderCompleted"));
 
-        verify(settlementApplicationService).createSettlement(
+        verify(settlementApplicationService).createSettlementAndCharge(
                 eq("ORD20260803001"), eq("USR_789"), eq("MCH_001"),
                 any(BigDecimal.class), eq("WECHAT_PAY"), eq("CNY"));
     }
 
     @Test
-    @DisplayName("非结算触发事件（OrderShipped）不生成结算单")
+    @DisplayName("非结算触发事件（OrderShipped）不触发结算扣款")
     void shouldIgnoreNonTriggerEvent() {
         consumer.onOrderEvent(eventJson("OrderShipped"));
 
-        verify(settlementApplicationService, never()).createSettlement(anyString(), anyString(), anyString(),
-                any(BigDecimal.class), anyString(), anyString());
+        verify(settlementApplicationService, never()).createSettlementAndCharge(
+                anyString(), anyString(), anyString(), any(BigDecimal.class), anyString(), anyString());
     }
 
     @Test
     @DisplayName("netAmount = 商品金额 - 优惠 + 运费（899900 - 50000 + 1500 = 851400）")
     void shouldPassCalculatedNetAmount() {
+        when(settlementApplicationService.createSettlementAndCharge(anyString(), anyString(), anyString(),
+                any(BigDecimal.class), anyString(), anyString()))
+                .thenReturn(settledView());
+
         consumer.onOrderEvent(eventJson("OrderApproved"));
 
-        verify(settlementApplicationService).createSettlement(
+        verify(settlementApplicationService).createSettlementAndCharge(
                 anyString(), anyString(), anyString(),
                 eq(new BigDecimal("851400")), anyString(), anyString());
     }
@@ -102,7 +124,7 @@ class OrderEventConsumerTest {
     @DisplayName("异常消息不抛出（记日志兜底），避免消费者中断")
     void shouldSwallowParseError() {
         consumer.onOrderEvent("{invalid json");
-        verify(settlementApplicationService, never()).createSettlement(anyString(), anyString(), anyString(),
-                any(BigDecimal.class), anyString(), anyString());
+        verify(settlementApplicationService, never()).createSettlementAndCharge(
+                anyString(), anyString(), anyString(), any(BigDecimal.class), anyString(), anyString());
     }
 }
