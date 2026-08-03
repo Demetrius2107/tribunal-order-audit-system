@@ -19,9 +19,16 @@
     <description>tribunal-order-audit-system — 按领域拆分的微服务订单审单系统（Author: Demetrius2107）</description>
 
     <modules>
+        <!-- 系统一：订单审单系统 -->
         <module>tribunal-common</module>
         <module>tribunal-customer-service</module>
         <module>tribunal-order-service</module>
+        <!-- 系统二：库存推送系统（上游数据集成网关，独立 common，不复用订单系统的 common） -->
+        <module>tribunal-inventory-push-common</module>
+        <module>tribunal-inventory-push-service</module>
+        <!-- 系统三：金融结算系统（下游资金结算中枢，独立 common） -->
+        <module>tribunal-finance-settlement-common</module>
+        <module>tribunal-finance-settlement-service</module>
     </modules>
 
     <properties>
@@ -45,6 +52,16 @@
             <dependency>
                 <groupId>com.demetrius</groupId>
                 <artifactId>tribunal-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.demetrius</groupId>
+                <artifactId>tribunal-inventory-push-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.demetrius</groupId>
+                <artifactId>tribunal-finance-settlement-common</artifactId>
                 <version>${project.version}</version>
             </dependency>
         </dependencies>
