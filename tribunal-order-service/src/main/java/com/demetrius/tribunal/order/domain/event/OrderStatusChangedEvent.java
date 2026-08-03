@@ -24,6 +24,7 @@ public record OrderStatusChangedEvent(
         String orderNo,
         OrderStatus from,
         OrderStatus to,
+        String operator,
         LocalDateTime occurredAt) {
 
     public OrderStatusChangedEvent {

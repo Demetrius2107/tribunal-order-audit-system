@@ -39,7 +39,7 @@ public class OrderStatusRecordListener {
         po.setOrderId(event.orderId().value());
         po.setFromStatus(event.from() == null ? null : event.from().name());
         po.setToStatus(event.to().name());
-        po.setOperator("system");
+        po.setOperator(event.operator() == null ? "system" : event.operator());
         po.setCreateTime(event.occurredAt() == null ? LocalDateTime.now() : event.occurredAt());
         recordMapper.insert(po);
     }

@@ -127,6 +127,19 @@ public class Order {
         transitTo(OrderStatus.CONFIRMED);
     }
 
+    /**
+     * 重算订单金额（明细重新定价后调用，金额规则集中在 OrderAmountCalculator）。
+     *
+     * <p>总金额 = Σ明细金额；应付金额 = 总金额 - 折扣金额（折扣当前为 0，后续接营销计算）。</p>
+     */
+    public void recalculateAmounts() {
+        this.totalAmount = skus.stream()
+                .map(OrderSku::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        this.payableAmount = this.totalAmount.subtract(this.discountAmount == null
+                ? BigDecimal.ZERO : this.discountAmount);
+    }
+
     /** 审单拒绝：待确认 → 已拒绝 */
     public void reject(String reason) {
         transitTo(OrderStatus.REJECTED);

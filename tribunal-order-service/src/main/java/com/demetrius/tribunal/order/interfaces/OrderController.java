@@ -82,6 +82,14 @@ public class OrderController {
     }
 
     /**
+     * 取消订单：POST /api/orders/{orderId}/cancel（释放信用预占，F-403）。
+     */
+    @PostMapping("/{orderId}/cancel")
+    public OrderResult cancel(@PathVariable String orderId) {
+        return orderApplicationService.cancelOrder(orderId);
+    }
+
+    /**
      * 心跳接口（参照通用做法，用于运维探活）。
      */
     @GetMapping("/heartbeat")
