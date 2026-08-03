@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li>信用占用/释放接口（POST /api/customers/{id}/credit/occupy 等）——审单通过后应由
  *       order-service 调用 customer-service 完成信用扣减，而不是本地改数</li>
- *   <li>客户创建/维护接口（对照旧项目 CustomerServiceImpl 的增删改查）</li>
+ *   <li>客户创建/维护接口（参照通用做法</li>
  * </ul>
  */
 @Service

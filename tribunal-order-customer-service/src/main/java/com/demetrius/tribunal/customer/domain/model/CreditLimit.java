@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 /**
  * 信用额度值对象。
  *
- * <p>对照旧项目：客户信用组 / 信用余额（creditProcessing / CreditGroup / CustomerBalanceDetail）。</p>
+ * <p>。</p>
  *
  * <p>值对象特点：不可变、无 ID、按值相等。金额计算放在值对象内部，避免到处散落 BigDecimal 运算。</p>
  */
@@ -28,7 +28,7 @@ public record CreditLimit(BigDecimal limit, BigDecimal used) {
         return getAvailable().compareTo(amount) >= 0;
     }
 
-    /** 占用信用（下单后冻结额度，TODO：对照旧项目信用占用/释放逻辑） */
+    /** 占用信用（下单后冻结额度，TODO：参照通用做法 */
     public CreditLimit occupy(BigDecimal amount) {
         return new CreditLimit(limit, used.add(amount));
     }

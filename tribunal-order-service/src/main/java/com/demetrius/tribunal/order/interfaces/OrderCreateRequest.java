@@ -10,7 +10,7 @@ import java.util.List;
 /**
  * 下单接口请求 DTO（接口层）。
  *
- * <p>对照旧项目：{@code OrderController} 的下单接口入参。</p>
+ * <p>参照通用做法。</p>
  * <p>接口层 DTO 只做参数接收与校验，不包含业务逻辑；随后转换为应用层 Command。</p>
  */
 public record OrderCreateRequest(

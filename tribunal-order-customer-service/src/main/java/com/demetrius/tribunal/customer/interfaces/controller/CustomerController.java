@@ -15,8 +15,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>TODO（学习任务）：</p>
  * <ul>
- *   <li>信用占用/释放接口（对照旧项目信用检查流程）</li>
- *   <li>客户增删改查接口（对照旧项目 CustomerController）</li>
+ *   <li>信用占用/释放接口（参照通用做法</li>
+ *   <li>客户增删改查接口（参照通用做法</li>
  *   <li>全局异常处理（@RestControllerAdvice 捕获 BizException）</li>
  * </ul>
  */
@@ -39,7 +39,7 @@ public class CustomerController {
     }
 
     /**
-     * 心跳接口（运维探活，对照旧项目 heartbeat）。
+     * 心跳接口（运维探活，。
      */
     @GetMapping("/heartbeat")
     public ApiResponse<String> heartbeat() {

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.PathVariable;
  *
  * <p>TODO（学习任务）：</p>
  * <ul>
- *   <li>接入 Nacos 注册中心：@FeignClient 只写 name，由注册中心路由（对照旧项目 Nacos 配置）</li>
+ *   <li>接入 Nacos 注册中心：@FeignClient 只写 name，由注册中心路由（参照通用做法</li>
  *   <li>补充信用占用/释放接口（POST /credit/occupy），审单通过后远程扣减信用</li>
  *   <li>思考：跨服务失败处理（熔断/降级/超时）——骨架未引入 Sentinel/Resilience4j</li>
  * </ul>

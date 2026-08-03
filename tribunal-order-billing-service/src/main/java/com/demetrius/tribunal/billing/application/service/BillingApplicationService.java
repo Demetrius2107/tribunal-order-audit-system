@@ -1,0 +1,151 @@
+package com.demetrius.tribunal.billing.application.service;
+
+import com.demetrius.tribunal.common.exception.BizException;
+import com.demetrius.tribunal.billing.application.dto.BillReceiveCommand;
+import com.demetrius.tribunal.billing.application.dto.BillResult;
+import com.demetrius.tribunal.billing.domain.event.BillStatusChangedEvent;
+import com.demetrius.tribunal.billing.domain.model.BillId;
+import com.demetrius.tribunal.billing.domain.model.BillLine;
+import com.demetrius.tribunal.billing.domain.model.FinanceBill;
+import com.demetrius.tribunal.billing.domain.repository.BillRepository;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
+
+/**
+ * 金融账单应用服务（用例编排层）。
+ *
+ * <p>对应需求：F-307（生成账单）、F-404（收款确认）、N-304（状态回传幂等）。</p>
+ *
+ * <p>职责：</p>
+ * <ol>
+ *   <li>接收订单服务转单 → 生成账单聚合 → 保存</li>
+ *   <li>账单动作（确认/结算/核销/取消）→ 状态机迁移 → 保存</li>
+ *   <li>状态变更发布事件 → 订阅者 Feign 回传订单服务</li>
+ * </ol>
+ *
+ * <p>TODO（学习任务）：</p>
+ * <ul>
+ *   <li>生成账单幂等：按 sourceOrderNo 查重（重复转单拒绝或幂等返回）</li>
+ *   <li>金额核对：账单金额与订单金额一致性校验（对账，F-701）</li>
+ *   <li>回传失败重试：回传订单服务失败记录待重试（对照对账任务 F-701）</li>
+ * </ul>
+ */
+@Service
+public class BillingApplicationService {
+
+    private final BillRepository billRepository;
+
+    private final ApplicationEventPublisher eventPublisher;
+
+    public BillingApplicationService(BillRepository billRepository,
+                                     ApplicationEventPublisher eventPublisher) {
+        this.billRepository = billRepository;
+        this.eventPublisher = eventPublisher;
+    }
+
+    /**
+     * 接收订单服务转单，生成账单（初始状态 = 已生成）。
+     */
+    @Transactional
+    public BillResult generateBill(BillReceiveCommand command) {
+        // TODO（学习任务）：按 sourceOrderNo 幂等查重，重复转单直接返回已有账单
+
+        List<BillLine> lines = command.lines().stream()
+                .map(l -> new BillLine(l.skuCode(), l.skuName(), l.quantity(), l.price()))
+                .toList();
+        FinanceBill bill = FinanceBill.generate(
+                new BillId(generateId()),
+                command.sourceOrderNo(),
+                command.customerId(),
+                lines);
+
+        billRepository.save(bill);
+        // TODO（学习任务）：发布 BillGeneratedEvent（通知/对账订阅）
+        return BillResult.from(bill);
+    }
+
+    /**
+     * 确认（用例：账单审核通过，待收款）。
+     */
+    @Transactional
+    public BillResult confirm(String billId) {
+        FinanceBill bill = findRequired(billId);
+        BillStatusChangedEvent event = snapshot(bill);
+        bill.confirm();
+        billRepository.save(bill);
+        eventPublisher.publishEvent(new BillStatusChangedEvent(
+                event.billId(), event.sourceOrderNo(), event.from(), bill.getStatus(), bill.getUpdateTime()));
+        return BillResult.from(bill);
+    }
+
+    /**
+     * 结算（用例：款项到位，终态）。
+     */
+    @Transactional
+    public BillResult settle(String billId) {
+        FinanceBill bill = findRequired(billId);
+        BillStatusChangedEvent event = snapshot(bill);
+        bill.settle();
+        billRepository.save(bill);
+        eventPublisher.publishEvent(new BillStatusChangedEvent(
+                event.billId(), event.sourceOrderNo(), event.from(), bill.getStatus(), bill.getUpdateTime()));
+        return BillResult.from(bill);
+    }
+
+    /**
+     * 核销（用例：账务核销完成，终态）。
+     */
+    @Transactional
+    public BillResult verify(String billId) {
+        FinanceBill bill = findRequired(billId);
+        BillStatusChangedEvent event = snapshot(bill);
+        bill.verify();
+        billRepository.save(bill);
+        eventPublisher.publishEvent(new BillStatusChangedEvent(
+                event.billId(), event.sourceOrderNo(), event.from(), bill.getStatus(), bill.getUpdateTime()));
+        return BillResult.from(bill);
+    }
+
+    /**
+     * 取消账单。
+     */
+    @Transactional
+    public BillResult cancel(String billId) {
+        FinanceBill bill = findRequired(billId);
+        BillStatusChangedEvent event = snapshot(bill);
+        bill.cancel();
+        billRepository.save(bill);
+        eventPublisher.publishEvent(new BillStatusChangedEvent(
+                event.billId(), event.sourceOrderNo(), event.from(), bill.getStatus(), bill.getUpdateTime()));
+        return BillResult.from(bill);
+    }
+
+    /**
+     * 查询账单。
+     */
+    @Transactional(readOnly = true)
+    public BillResult getBill(String billId) {
+        return BillResult.from(findRequired(billId));
+    }
+
+    private FinanceBill findRequired(String billId) {
+        return billRepository.findById(new BillId(billId))
+                .orElseThrow(() -> new BizException("300001", "账单不存在: " + billId));
+    }
+
+    /** 事件发布前快照（from 状态）。 */
+    private BillStatusChangedEvent snapshot(FinanceBill bill) {
+        return new BillStatusChangedEvent(
+                bill.getId(), bill.getSourceOrderNo(), bill.getStatus(), null, null);
+    }
+
+    /**
+     * TODO（学习任务）：生成账单 ID。
+     */
+    private String generateId() {
+        return java.util.UUID.randomUUID().toString().replace("-", "");
+    }
+}

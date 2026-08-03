@@ -10,8 +10,8 @@ import org.springframework.context.annotation.Configuration;
 /**
  * MyBatis-Plus 配置：分页插件 + 乐观锁插件。
  *
- * <p>TODO（学习任务）：乐观锁需要 PO 加 @Version 字段（对照旧项目并发控制），
- * 分页用法对照旧项目 pagehelper（PageInfo / PageHelper.startPage）。</p>
+ * <p>TODO（学习任务）：乐观锁需要 PO 加 @Version 字段（，
+ * 分页用法。</p>
  */
 @Configuration
 public class MybatisPlusConfig {

@@ -19,11 +19,18 @@
     <description>tribunal-order-audit-system — 按领域拆分的微服务订单审单系统（Author: Demetrius2107）</description>
 
     <modules>
-        <!-- 系统一：订单审单系统 -->
+        <!-- 系统一：订单审单系统（9 业务模块 + 共享库） -->
         <module>tribunal-order-common</module>
+        <module>tribunal-order-auth-service</module>
         <module>tribunal-order-customer-service</module>
         <module>tribunal-order-service</module>
-        <!-- 系统二：库存推送系统（上游数据集成网关，独立 common，不复用订单系统的 common） -->
+        <module>tribunal-order-inventory-service</module>
+        <module>tribunal-order-billing-service</module>
+        <module>tribunal-order-marketing-service</module>
+        <module>tribunal-order-fulfillment-service</module>
+        <module>tribunal-order-notification-service</module>
+        <module>tribunal-order-task-service</module>
+        <!-- 系统二：库存推送系统（上游数据集成网关，独立 common） -->
         <module>tribunal-inventory-push-common</module>
         <module>tribunal-inventory-push-service</module>
         <!-- 系统三：金融结算系统（下游资金结算中枢，独立 common） -->
