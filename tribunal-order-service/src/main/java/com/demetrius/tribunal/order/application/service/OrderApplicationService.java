@@ -7,11 +7,15 @@ import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
+import com.demetrius.tribunal.common.exception.BizException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 订单应用服务（用例编排层）。
@@ -82,9 +86,8 @@ public class OrderApplicationService {
      */
     @Transactional(readOnly = true)
     public OrderResult getOrder(String orderId) {
-        // TODO（学习任务）：不存在时抛业务异常（参照通用做法
         Order order = orderRepository.findById(new OrderId(orderId))
-                .orElseThrow(() -> new IllegalArgumentException("订单不存在: " + orderId));
+                .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
         return OrderResult.from(order);
     }
 
@@ -97,10 +100,14 @@ public class OrderApplicationService {
     }
 
     /**
-     * TODO（学习任务）：生成订单编号。
-     * 需保证业务唯一（数据库唯一约束）。
+     * 生成订单编号：ORD + 时间戳（yyyyMMddHHmmss）+ 4 位随机数。
+     *
+     * <p>业务唯一性由数据库唯一约束（t_order.order_no）兜底（N-205 幂等第一道防线），
+     * 高并发下若冲突可重试或改用分布式发号器（后续接入）。</p>
      */
     private String generateOrderNo() {
-        return "ORD" + System.currentTimeMillis();
+        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        int rand = ThreadLocalRandom.current().nextInt(1000, 10000);
+        return "ORD" + ts + rand;
     }
 }
