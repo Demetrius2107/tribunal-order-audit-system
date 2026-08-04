@@ -13,6 +13,7 @@ import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
+import com.demetrius.tribunal.order.domain.service.DepositCalculator;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
 import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.common.response.ApiResponse;
@@ -63,6 +64,8 @@ public class OrderApplicationService {
 
     private final OrderReviewDomainService reviewDomainService;
 
+    private final DepositCalculator depositCalculator;
+
     private final OrderIdempotencyGuard idempotencyGuard;
 
     public OrderApplicationService(OrderRepository orderRepository,
@@ -70,12 +73,14 @@ public class OrderApplicationService {
                                    CustomerFeignClient customerFeignClient,
                                    InventoryFeignClient inventoryFeignClient,
                                    OrderReviewDomainService reviewDomainService,
+                                   DepositCalculator depositCalculator,
                                    OrderIdempotencyGuard idempotencyGuard) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.customerFeignClient = customerFeignClient;
         this.inventoryFeignClient = inventoryFeignClient;
         this.reviewDomainService = reviewDomainService;
+        this.depositCalculator = depositCalculator;
         this.idempotencyGuard = idempotencyGuard;
     }
 
@@ -119,6 +124,8 @@ public class OrderApplicationService {
         if (command.shippingFee() != null && command.shippingFee().compareTo(BigDecimal.ZERO) > 0) {
             order.applyShippingFee(command.shippingFee());
         }
+        // 押金计算（F-205：按 SKU-客户押金配置计算押金，业务文档四节）
+        depositCalculator.applyDeposit(order, command.depositConfigBySku());
 
         // 整托校验：SKU 数量必须是整托规格的倍数（业务文档五节 F-302，规格来自 SKU 主数据）
         reviewDomainService.validateWholePallet(order, command.palletSpecs());

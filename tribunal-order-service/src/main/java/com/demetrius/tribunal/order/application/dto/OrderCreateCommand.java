@@ -30,7 +30,9 @@ public record OrderCreateCommand(
         /** 折扣池抵扣金额（业务文档三节：用折扣池余额冲抵应付，可选默认 0） */
         BigDecimal discountPoolDeduction,
         /** 运费（F-103：按送货地址/SKU 计算，可选默认 0） */
-        BigDecimal shippingFee) {
+        BigDecimal shippingFee,
+        /** 押金单价配置：SKU编码 → 押金单价（F-205，来源 customer_sku_deposit，可选） */
+        Map<String, BigDecimal> depositConfigBySku) {
 
     public OrderCreateCommand {
         if (orderType == null) {

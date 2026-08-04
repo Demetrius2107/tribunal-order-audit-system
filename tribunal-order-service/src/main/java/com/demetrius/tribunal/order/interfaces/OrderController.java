@@ -70,7 +70,8 @@ public class OrderController {
                                 r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
                         .toList(),
                 request.discountPoolDeduction(),
-                request.shippingFee());
+                request.shippingFee(),
+                request.depositConfigBySku());
         return orderApplicationService.createOrder(command);
     }
 

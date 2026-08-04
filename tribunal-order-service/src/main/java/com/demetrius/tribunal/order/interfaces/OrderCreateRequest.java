@@ -39,7 +39,10 @@ public record OrderCreateRequest(
         BigDecimal discountPoolDeduction,
 
         /** 运费（可选，默认 0；F-103 按送货地址/SKU 计算） */
-        BigDecimal shippingFee) {
+        BigDecimal shippingFee,
+
+        /** 押金单价配置：SKU编码 → 押金单价（可选；F-205，来源 customer_sku_deposit） */
+        Map<String, BigDecimal> depositConfigBySku) {
 
     public OrderCreateRequest {
         if (orderType == null) {
