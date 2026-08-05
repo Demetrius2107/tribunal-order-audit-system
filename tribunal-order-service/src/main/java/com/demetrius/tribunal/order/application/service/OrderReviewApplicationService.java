@@ -165,9 +165,10 @@ public class OrderReviewApplicationService {
         CustomerCreditDto credit = customerFeignClient.getCustomerCredit(order.getCustomerId());
         reviewDomainService.validateForReview(order, credit, operator);
 
-        // ③~⑥ 跨服务编排：预占库存 → 生成账单 → 创建履约 → 发送通知
-        // 远程副作用不会随本地事务回滚，任一失败必须补偿已预占的库存（F-503 一致性的骨架保障）
+        // ③~⑥ 跨服务编排：预占库存 → 信用占用 → 生成账单 → 创建履约 → 发送通知
+        // 远程副作用不会随本地事务回滚，任一失败必须补偿已做的操作（F-403/F-503）
         List<String> reservedSkus = new ArrayList<>();
+        boolean creditOccupied = false;
         try {
             for (OrderSku sku : order.getSkus()) {
                 ApiResponse<InventoryItemResult> resp =
@@ -175,6 +176,13 @@ public class OrderReviewApplicationService {
                 checkFeignSuccess(resp, "库存预占失败: " + sku.getSkuCode());
                 reservedSkus.add(sku.getSkuCode());
             }
+
+            // ③' 信用占用（F-403/N-301）：冻结应付金额等额的信用额度
+            ApiResponse<CustomerCreditDto> creditResp = customerFeignClient.occupyCredit(
+                    order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+            checkFeignSuccess(creditResp, "信用占用失败");
+            creditOccupied = true;
 
             ApiResponse<BillTransferResult> billResponse = billingFeignClient.transfer(new BillTransferRequest(
                     order.getOrderNo(),
@@ -201,11 +209,17 @@ public class OrderReviewApplicationService {
                             "您的订单 " + order.getOrderNo() + " 已通过审单"));
             checkFeignSuccess(notificationResponse, "通知发送失败");
         } catch (BizException e) {
-            // 补偿：回滚本次已预占的库存；信用预占保留（订单仍为待确认，拒绝/取消时才释放）
+            // 补偿：回滚已预占的库存 + 已占用的信用
             compensateReserved(reservedSkus, order);
+            if (creditOccupied) {
+                compensateCreditOccupy(order);
+            }
             throw e;
         } catch (Exception e) {
             compensateReserved(reservedSkus, order);
+            if (creditOccupied) {
+                compensateCreditOccupy(order);
+            }
             throw new BizException("200006", "审单跨服务编排失败: " + e.getMessage());
         }
 
@@ -251,6 +265,20 @@ public class OrderReviewApplicationService {
     }
 
     /**
+     * 补偿：释放已占用的信用（F-403，与 approve 中的 occupyCredit 对称）。
+     * <p>当跨服务编排过程中信用占用成功后后续步骤失败时调用，避免信用悬空。</p>
+     */
+    private void compensateCreditOccupy(Order order) {
+        try {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        } catch (Exception ex) {
+            log.error("审单失败后信用补偿失败 customerId={}, amount={}",
+                    order.getCustomerId(), order.getPayableAmount(), ex);
+        }
+    }
+
+    /**
      * 构建订单确认事件（OrderApproved），对接下游金融结算系统的 order-events 主题。
      */
     private OrderEventMessage buildApprovedEvent(Order order) {
@@ -281,13 +309,22 @@ public class OrderReviewApplicationService {
      * （与 approve 的预占对称，避免信用/库存悬空，F-403/F-503）。</p>
      */
     private void reject(Order order, String reason, String operator) {
-        // 释放信用预占（与下单占用对称）
-        customerFeignClient.releaseCredit(order.getCustomerId(),
-                new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        // 释放信用预占（与下单占用对称，失败不阻断拒绝流程，对账任务兜底）
+        try {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        } catch (Exception ex) {
+            log.error("审单拒绝时信用释放失败 customerId={}, amount={}",
+                    order.getCustomerId(), order.getPayableAmount(), ex);
+        }
 
-        // 释放库存预占（逐 SKU；TODO：失败处理/补偿）
+        // 释放库存预占（逐 SKU，失败不阻断，对账任务兜底）
         for (OrderSku sku : order.getSkus()) {
-            inventoryFeignClient.release(sku.getSkuCode(), sku.getQuantity());
+            try {
+                inventoryFeignClient.release(sku.getSkuCode(), sku.getQuantity());
+            } catch (Exception ex) {
+                log.error("审单拒绝时库存释放失败 skuCode={}", sku.getSkuCode(), ex);
+            }
         }
 
         OrderStatusChangedEvent event = new OrderStatusChangedEvent(

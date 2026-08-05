@@ -23,6 +23,15 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
+# JWT 配置（本地解析 Token 鉴权；须与 auth-service 的 secret 一致）
+jwt:
+  secret: ${JWT_SECRET:tribunal-order-auth-secret-key-2026-0123456789abcdef}
+
+# 鉴权配置
+auth:
+  # 服务间 Feign 调用互信令牌（各服务须一致）
+  internal-token: ${AUTH_INTERNAL_TOKEN:tribunal-internal-token-2026}
+
 logging:
   level:
     com.demetrius.tribunal.inventory: debug

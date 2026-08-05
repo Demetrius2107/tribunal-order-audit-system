@@ -19,6 +19,8 @@ import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.infrastructure.idempotency.OrderIdempotencyGuard;
 import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +55,8 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 @Service
 public class OrderApplicationService {
+
+    private static final Logger log = LoggerFactory.getLogger(OrderApplicationService.class);
 
     private final OrderRepository orderRepository;
 
@@ -154,9 +158,14 @@ public class OrderApplicationService {
         Order order = orderRepository.findById(new OrderId(orderId))
                 .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
 
-        // 释放信用预占
-        customerFeignClient.releaseCredit(order.getCustomerId(),
-                new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        // 释放信用预占（F-403：取消订单必须释放信用，失败不阻断流程，对账任务兜底）
+        try {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        } catch (Exception ex) {
+            log.error("取消订单时信用释放失败 orderId={}, customerId={}, amount={}",
+                    orderId, order.getCustomerId(), order.getPayableAmount(), ex);
+        }
 
         order.cancel();
         orderRepository.save(order);
