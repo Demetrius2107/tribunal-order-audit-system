@@ -23,6 +23,20 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
+# JWT 配置（签发/校验；各服务须配置相同的 secret 才能本地解析 Token）
+jwt:
+  secret: ${JWT_SECRET:tribunal-order-auth-secret-key-2026-0123456789abcdef}
+  access-expiration-ms: 7200000        # Access Token 2h
+  refresh-expiration-ms: 604800000     # Refresh Token 7d
+  login:
+    max-failures: 5                    # 连续失败 5 次锁定
+    lock-minutes: 15                   # 锁定 15 分钟
+
+# 鉴权配置
+auth:
+  # 服务间 Feign 调用互信令牌（各服务须一致）
+  internal-token: ${AUTH_INTERNAL_TOKEN:tribunal-internal-token-2026}
+
 logging:
   level:
     com.demetrius.tribunal.auth: debug

@@ -1,43 +1,45 @@
 package com.demetrius.tribunal.auth.domain.model;
 
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+
 /**
  * 用户聚合根。
  *
  * <p>对应需求：F-901（用户/角色/权限，RBAC）、N-401（认证）。</p>
  *
- * <p>TODO（学习任务）：</p>
- * <ul>
- *   <li>密码加密存储（BCrypt），登录时校验</li>
- *   <li>Token 签发（JWT：过期/刷新），对照 N-401</li>
- *   <li>角色-权限关联与接口级鉴权（RBAC）</li>
- * </ul>
+ * <p>密码使用 BCrypt 加密存储，登录时用 BCrypt 校验。</p>
  */
 public class User {
+
+    private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder();
 
     private final String id;
 
     private final String username;
 
-    /** 密码密文（TODO：BCrypt 加密存储） */
+    /** 密码密文（BCrypt 加密存储） */
     private String password;
 
     private final String roleCode;
 
-    public User(String id, String username, String password, String roleCode) {
+    /**
+     * 创建新用户：密码自动 BCrypt 加密。
+     */
+    public User(String id, String username, String rawPassword, String roleCode) {
         if (username == null || username.isBlank()) {
             throw new IllegalArgumentException("用户名不能为空");
         }
         this.id = id;
         this.username = username;
-        this.password = password;
+        this.password = ENCODER.encode(rawPassword);
         this.roleCode = roleCode;
     }
 
     /**
-     * 校验密码（骨架：明文比对；TODO：BCrypt matches）。
+     * 校验密码（BCrypt 比对）。
      */
     public boolean verifyPassword(String rawPassword) {
-        return password != null && password.equals(rawPassword);
+        return password != null && ENCODER.matches(rawPassword, password);
     }
 
     public String getId() {

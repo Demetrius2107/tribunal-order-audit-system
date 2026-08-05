@@ -1,15 +1,19 @@
 package com.demetrius.tribunal.order.interfaces.controller;
 
 import com.demetrius.tribunal.order.application.dto.OrderCreateCommand;
+import com.demetrius.tribunal.order.application.dto.OrderPageResult;
 import com.demetrius.tribunal.order.application.dto.OrderResult;
 import com.demetrius.tribunal.order.application.dto.OrderReviewCommand;
 import com.demetrius.tribunal.order.application.service.OrderApplicationService;
 import com.demetrius.tribunal.order.application.service.OrderReviewApplicationService;
 import com.demetrius.tribunal.order.interfaces.dto.OrderCreateRequest;
+import com.demetrius.tribunal.order.interfaces.dto.OrderModifyRequest;
 import com.demetrius.tribunal.order.interfaces.dto.OrderReviewRequest;
+import com.demetrius.tribunal.common.auth.RequirePermission;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -49,36 +53,84 @@ public class OrderController {
     }
 
     /**
-     * 下单：POST /api/orders
+     * 下单：POST /api/orders（需权限 order:create）
      */
     @PostMapping
+    @RequirePermission("order:create")
     public OrderResult create(@Valid @RequestBody OrderCreateRequest request) {
         OrderCreateCommand command = new OrderCreateCommand(
                 request.customerId(),
                 request.skus().stream()
                         .map(s -> new OrderCreateCommand.SkuItem(
                                 s.skuCode(), s.skuName(), s.quantity(), s.price()))
-                        .toList());
+                        .toList(),
+                request.palletSpecs(),
+                request.orderType(),
+                request.carPooling(),
+                request.returnablePackagings() == null ? List.of() : request.returnablePackagings().stream()
+                        .map(r -> new OrderCreateCommand.ReturnableItem(
+                                r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
+                        .toList(),
+                request.discountPoolDeduction(),
+                request.shippingFee(),
+                request.depositConfigBySku());
         return orderApplicationService.createOrder(command);
     }
 
     /**
-     * 查询订单：GET /api/orders/{orderId}
+     * 查询订单：GET /api/orders/{orderId}（需权限 order:view）
      */
     @GetMapping("/{orderId}")
+    @RequirePermission("order:view")
     public OrderResult get(@PathVariable String orderId) {
         return orderApplicationService.getOrder(orderId);
     }
 
     /**
-     * 审单：POST /api/orders/{orderId}/review
+     * 分页查询订单列表：GET /api/orders?customerId=&status=&pageNum=1&pageSize=10（需权限 order:view）
+     */
+    @GetMapping
+    @RequirePermission("order:view")
+    public OrderPageResult list(@RequestParam(required = false) String customerId,
+                                @RequestParam(required = false) String status,
+                                @RequestParam(defaultValue = "1") int pageNum,
+                                @RequestParam(defaultValue = "10") int pageSize) {
+        return orderApplicationService.listOrders(customerId, status, pageNum, pageSize);
+    }
+
+    /**
+     * 审单：POST /api/orders/{orderId}/review（需权限 order:review）
      */
     @PostMapping("/{orderId}/review")
+    @RequirePermission("order:review")
     public OrderResult review(@PathVariable String orderId,
                               @Valid @RequestBody OrderReviewRequest request) {
         OrderReviewCommand command = new OrderReviewCommand(
                 orderId, request.approved(), request.reason(), request.operator());
         return reviewApplicationService.review(command);
+    }
+
+    /**
+     * 修改订单：PUT /api/orders/{orderId}（F-309，仅待确认状态可改，替换明细并重算金额；需权限 order:modify）
+     */
+    @PutMapping("/{orderId}")
+    @RequirePermission("order:modify")
+    public OrderResult modify(@PathVariable String orderId,
+                              @Valid @RequestBody OrderModifyRequest request) {
+        List<OrderCreateCommand.SkuItem> items = request.skus().stream()
+                .map(s -> new OrderCreateCommand.SkuItem(
+                        s.skuCode(), s.skuName(), s.quantity(), s.price()))
+                .toList();
+        return orderApplicationService.modifyOrder(orderId, items, request.palletSpecs());
+    }
+
+    /**
+     * 取消订单：POST /api/orders/{orderId}/cancel（释放信用预占，F-403；需权限 order:cancel）。
+     */
+    @PostMapping("/{orderId}/cancel")
+    @RequirePermission("order:cancel")
+    public OrderResult cancel(@PathVariable String orderId) {
+        return orderApplicationService.cancelOrder(orderId);
     }
 
     /**

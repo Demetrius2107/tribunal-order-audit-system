@@ -31,12 +31,33 @@ public class OrderPo {
 
     private String customerId;
 
+    /** 订单类型（NORMAL/PRE_ORDER） */
+    private String orderType;
+
+    /** 是否拼车订单 */
+    private Boolean carPooling;
+
+    /** 是否已参与拼车 */
+    private Boolean carPoolJoined;
+
     /** 状态（与 OrderStatus.name() 对应） */
     private String status;
 
     private BigDecimal totalAmount;
 
     private BigDecimal discountAmount;
+
+    /** 折扣池抵扣 */
+    private BigDecimal discountPoolDeduction;
+
+    /** 押金 */
+    private BigDecimal depositAmount;
+
+    /** 税费 */
+    private BigDecimal taxAmount;
+
+    /** 运费 */
+    private BigDecimal shippingFee;
 
     private BigDecimal payableAmount;
 

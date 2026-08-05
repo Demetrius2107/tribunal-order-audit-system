@@ -1,17 +1,36 @@
 package com.demetrius.tribunal.order.application.service;
 
 import com.demetrius.tribunal.order.application.dto.OrderCreateCommand;
+import com.demetrius.tribunal.order.application.dto.OrderPageResult;
 import com.demetrius.tribunal.order.application.dto.OrderResult;
+import com.demetrius.tribunal.order.client.CustomerFeignClient;
+import com.demetrius.tribunal.order.client.InventoryFeignClient;
+import com.demetrius.tribunal.order.client.InventoryItemResult;
 import com.demetrius.tribunal.order.domain.event.OrderCreatedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
+import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
+import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
+import com.demetrius.tribunal.order.domain.service.DepositCalculator;
+import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
+import com.demetrius.tribunal.common.exception.BizException;
+import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.order.infrastructure.idempotency.OrderIdempotencyGuard;
+import feign.FeignException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * 订单应用服务（用例编排层）。
@@ -37,25 +56,51 @@ import java.util.List;
 @Service
 public class OrderApplicationService {
 
+    private static final Logger log = LoggerFactory.getLogger(OrderApplicationService.class);
+
     private final OrderRepository orderRepository;
 
     private final ApplicationEventPublisher eventPublisher;
 
+    private final CustomerFeignClient customerFeignClient;
+
+    private final InventoryFeignClient inventoryFeignClient;
+
+    private final OrderReviewDomainService reviewDomainService;
+
+    private final DepositCalculator depositCalculator;
+
+    private final OrderIdempotencyGuard idempotencyGuard;
+
     public OrderApplicationService(OrderRepository orderRepository,
-                                   ApplicationEventPublisher eventPublisher) {
+                                   ApplicationEventPublisher eventPublisher,
+                                   CustomerFeignClient customerFeignClient,
+                                   InventoryFeignClient inventoryFeignClient,
+                                   OrderReviewDomainService reviewDomainService,
+                                   DepositCalculator depositCalculator,
+                                   OrderIdempotencyGuard idempotencyGuard) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
+        this.customerFeignClient = customerFeignClient;
+        this.inventoryFeignClient = inventoryFeignClient;
+        this.reviewDomainService = reviewDomainService;
+        this.depositCalculator = depositCalculator;
+        this.idempotencyGuard = idempotencyGuard;
     }
 
     /**
      * 创建订单（用例：下单）。
+     *
+     * <p>下单即占用客户信用额度（F-403/N-301），审单拒绝/订单取消时释放。</p>
      *
      * @param command 下单命令
      * @return 订单结果
      */
     @Transactional
     public OrderResult createOrder(OrderCreateCommand command) {
-        // TODO（学习任务）：校验客户/SKU 存在性、整托、渠道（行业通用做法 saveFinalOrder 前半段）
+        // 前置校验：客户存在性 + SKU 存在性（下单前校验，避免占用信用/落库后才暴露问题）
+        validateCustomerExists(command.customerId());
+        validateSkusExist(command.skus());
 
         // 组装聚合
         String orderIdValue = generateOrderId();
@@ -63,17 +108,101 @@ public class OrderApplicationService {
         List<OrderSku> skus = command.skus().stream()
                 .map(s -> new OrderSku(s.skuCode(), s.skuName(), s.quantity(), s.price()))
                 .toList();
-        Order order = Order.create(new OrderId(orderIdValue), orderNo, command.customerId(), skus);
 
-        // TODO（学习任务）：促销/折扣计算后，订单金额可能变化（先做基础版：金额=Σ明细）
+        // 幂等防重：同客户同明细 30 秒内重复提交直接拒绝（N-405，数据库唯一键兜底）
+        idempotencyGuard.checkDuplicate(command.customerId(), skus);
+
+        Order order = Order.create(new OrderId(orderIdValue), orderNo, command.customerId(),
+                command.orderType(), command.carPooling(), skus,
+                command.returnablePackagings() == null ? List.of() : command.returnablePackagings().stream()
+                        .map(r -> new ReturnablePackaging(
+                                r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
+                        .toList());
+
+        // 折扣池抵扣（F-204：用折扣池余额冲抵应付金额，业务文档三节）
+        if (command.discountPoolDeduction() != null
+                && command.discountPoolDeduction().compareTo(BigDecimal.ZERO) > 0) {
+            order.applyDiscountPoolDeduction(command.discountPoolDeduction());
+        }
+        // 运费（F-103：按送货地址/SKU 计算，参与金额汇总）
+        if (command.shippingFee() != null && command.shippingFee().compareTo(BigDecimal.ZERO) > 0) {
+            order.applyShippingFee(command.shippingFee());
+        }
+        // 押金计算（F-205：按 SKU-客户押金配置计算押金，业务文档四节）
+        depositCalculator.applyDeposit(order, command.depositConfigBySku());
+
+        // 整托校验：SKU 数量必须是整托规格的倍数（业务文档五节 F-302，规格来自 SKU 主数据）
+        reviewDomainService.validateWholePallet(order, command.palletSpecs());
+
+        // 下单即占用信用（信用是 customer 领域的动作，走 customer-service 接口）
+        customerFeignClient.occupyCredit(order.getCustomerId(),
+                new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
 
         // 保存聚合（事务内）
         orderRepository.save(order);
 
-        // 发布领域事件（通知/审计解耦，参照通用做法
+        // 发布领域事件（通知/审计解耦）
         eventPublisher.publishEvent(new OrderCreatedEvent(
                 order.getId(), order.getOrderNo(), order.getCustomerId(), order.getCreateTime()));
 
+        return OrderResult.from(order);
+    }
+
+    /**
+     * 取消订单（用例：用户取消/超时关单）。
+     *
+     * <p>取消即释放信用预占（F-403），与下单占用的额度对称。</p>
+     */
+    @Transactional
+    public OrderResult cancelOrder(String orderId) {
+        Order order = orderRepository.findById(new OrderId(orderId))
+                .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
+
+        // 释放信用预占（F-403：取消订单必须释放信用，失败不阻断流程，对账任务兜底）
+        try {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        } catch (Exception ex) {
+            log.error("取消订单时信用释放失败 orderId={}, customerId={}, amount={}",
+                    orderId, order.getCustomerId(), order.getPayableAmount(), ex);
+        }
+
+        order.cancel();
+        orderRepository.save(order);
+        return OrderResult.from(order);
+    }
+
+    /**
+     * 修改订单（F-309 改单）：仅待确认状态允许，替换明细 + 重算金额 + 整托校验。
+     *
+     * <p>金额变化后按差额调整信用预占：应付增加则补占用，减少则释放（F-403 保持一致）。</p>
+     */
+    @Transactional
+    public OrderResult modifyOrder(String orderId, List<OrderCreateCommand.SkuItem> skuItems,
+                                   Map<String, BigDecimal> palletSpecs) {
+        Order order = orderRepository.findById(new OrderId(orderId))
+                .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
+
+        BigDecimal beforePayable = order.getPayableAmount();
+
+        List<OrderSku> newSkus = skuItems.stream()
+                .map(s -> new OrderSku(s.skuCode(), s.skuName(), s.quantity(), s.price()))
+                .toList();
+        order.modifySkus(newSkus);
+        // 改单后的明细同样要过整托校验（业务文档五节）
+        reviewDomainService.validateWholePallet(order, palletSpecs);
+
+        // 信用预占按差额调整（改单后应付变化）
+        BigDecimal delta = order.getPayableAmount().subtract(beforePayable);
+        if (delta.compareTo(BigDecimal.ZERO) > 0) {
+            customerFeignClient.occupyCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(delta));
+        } else if (delta.compareTo(BigDecimal.ZERO) < 0) {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(delta.abs()));
+        }
+
+        orderRepository.save(order);
         return OrderResult.from(order);
     }
 
@@ -82,10 +211,44 @@ public class OrderApplicationService {
      */
     @Transactional(readOnly = true)
     public OrderResult getOrder(String orderId) {
-        // TODO（学习任务）：不存在时抛业务异常（参照通用做法
         Order order = orderRepository.findById(new OrderId(orderId))
-                .orElseThrow(() -> new IllegalArgumentException("订单不存在: " + orderId));
+                .orElseThrow(() -> new BizException("200002", "订单不存在: " + orderId));
         return OrderResult.from(order);
+    }
+
+    /**
+     * 分页查询订单列表（可按客户/状态过滤）。
+     */
+    @Transactional(readOnly = true)
+    public OrderPageResult listOrders(String customerId, String status, int pageNum, int pageSize) {
+        OrderPage page = orderRepository.findPage(customerId, status, pageNum, pageSize);
+        List<OrderResult> results = page.orders().stream()
+                .map(OrderResult::from)
+                .toList();
+        return OrderPageResult.of(page.total(), page.pageNum(), page.pageSize(), results);
+    }
+
+    /**
+     * 校验客户存在性（customer-service 查询信用，客户不存在时远程返回 400 → FeignException）。
+     */
+    private void validateCustomerExists(String customerId) {
+        try {
+            customerFeignClient.getCustomerCredit(customerId);
+        } catch (FeignException e) {
+            throw new BizException("200008", "客户不存在: " + customerId);
+        }
+    }
+
+    /**
+     * 校验 SKU 存在性（逐 SKU 调 inventory-service 查询物料主数据，F-101）。
+     */
+    private void validateSkusExist(List<OrderCreateCommand.SkuItem> skus) {
+        for (OrderCreateCommand.SkuItem sku : skus) {
+            ApiResponse<InventoryItemResult> resp = inventoryFeignClient.getBySkuCode(sku.skuCode());
+            if (resp == null || !resp.isSuccess() || resp.getData() == null) {
+                throw new BizException("200009", "SKU 不存在: " + sku.skuCode());
+            }
+        }
     }
 
     /**
@@ -97,10 +260,14 @@ public class OrderApplicationService {
     }
 
     /**
-     * TODO（学习任务）：生成订单编号。
-     * 需保证业务唯一（数据库唯一约束）。
+     * 生成订单编号：ORD + 时间戳（yyyyMMddHHmmss）+ 4 位随机数。
+     *
+     * <p>业务唯一性由数据库唯一约束（t_order.order_no）兜底（N-205 幂等第一道防线），
+     * 高并发下若冲突可重试或改用分布式发号器（后续接入）。</p>
      */
     private String generateOrderNo() {
-        return "ORD" + System.currentTimeMillis();
+        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmss"));
+        int rand = ThreadLocalRandom.current().nextInt(1000, 10000);
+        return "ORD" + ts + rand;
     }
 }

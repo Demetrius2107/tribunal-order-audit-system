@@ -22,7 +22,7 @@ public class OrderSku {
 
     private final BigDecimal quantity;
 
-    private final BigDecimal price;
+    private BigDecimal price;
 
     private BigDecimal amount;
 
@@ -40,8 +40,18 @@ public class OrderSku {
         this.skuName = skuName;
         this.quantity = quantity;
         this.price = price;
-        // TODO（学习任务）：金额 = 数量 * 单价（后续可扩展：押金/折扣/税参与计算）
         this.amount = quantity.multiply(price);
+    }
+
+    /**
+     * 重新定价（审单时以 marketing 取价覆盖，F-306 审单前重新计价）。
+     */
+    public void reprice(BigDecimal newPrice) {
+        if (newPrice == null || newPrice.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("SKU单价不能为负: " + skuCode);
+        }
+        this.price = newPrice;
+        this.amount = quantity.multiply(newPrice);
     }
 
     public String getSkuCode() {

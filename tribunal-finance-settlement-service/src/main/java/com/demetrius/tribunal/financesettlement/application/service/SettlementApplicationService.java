@@ -54,6 +54,32 @@ public class SettlementApplicationService {
     }
 
     /**
+     * 订单事件编排：生成结算单(PENDING) → 幂等扣款(CHARGED)（PRD 6.2 正向流程起点）。
+     *
+     * <p>幂等：重复收到同一订单事件时，结算单已生成且已扣款则直接返回（FR-003/FR-016）。</p>
+     */
+    @Transactional
+    public SettlementView createSettlementAndCharge(String orderId, String userId, String merchantId,
+                                                    BigDecimal netAmount, String paymentMethod, String currency) {
+        String settlementId = createSettlement(orderId, userId, merchantId, netAmount, paymentMethod, currency);
+
+        // 幂等：已扣款/扣款中直接返回成功（FR-016），不再重复扣款
+        SettlementOrder existing = settlementOrderRepository.findBySettlementId(settlementId)
+                .orElseThrow(() -> new BizException("FIN-001", "结算单不存在: " + settlementId));
+        if ("CHARGED".equals(existing.getStatus()) || "CHARGING".equals(existing.getStatus())) {
+            return toView(existing);
+        }
+
+        ChargeRequest chargeRequest = new ChargeRequest();
+        chargeRequest.setSettlementId(settlementId);
+        chargeRequest.setIdempotencyKey(settlementId + "_BATCH_1");
+        chargeRequest.setAmount(netAmount);
+        chargeRequest.setCurrency(currency);
+        chargeRequest.setPaymentMethod(paymentMethod);
+        return charge(chargeRequest);
+    }
+
+    /**
      * 按订单生成结算单（监听订单完成事件，PRD 2.1.1 FR-001，幂等：已生成则忽略 FR-003）。
      */
     @Transactional
