@@ -3,9 +3,7 @@ package com.demetrius.tribunal.order.application.service;
 import com.demetrius.tribunal.common.dto.CustomerCreditDto;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.application.dto.OrderReviewCommand;
-import com.demetrius.tribunal.order.client.BillingFeignClient;
 import com.demetrius.tribunal.order.client.CustomerFeignClient;
-import com.demetrius.tribunal.order.client.FulfillmentFeignClient;
 import com.demetrius.tribunal.order.client.InventoryFeignClient;
 import com.demetrius.tribunal.order.client.MarketingFeignClient;
 import com.demetrius.tribunal.order.client.NotificationFeignClient;
@@ -40,6 +38,9 @@ import static org.mockito.Mockito.when;
 
 /**
  * 审单应用服务单元测试（重点：审单拒绝的信用/库存补偿，F-403/F-503）。
+ *
+ * <p>M3 异步化：billing/fulfillment 改为 outbox → Kafka 异步事件，
+ * 审单通过时验证 outbox 事件发布而非 Feign 调用。</p>
  */
 @ExtendWith(MockitoExtension.class)
 class OrderReviewApplicationServiceTest {
@@ -52,10 +53,6 @@ class OrderReviewApplicationServiceTest {
     private MarketingFeignClient marketingFeignClient;
     @Mock
     private InventoryFeignClient inventoryFeignClient;
-    @Mock
-    private BillingFeignClient billingFeignClient;
-    @Mock
-    private FulfillmentFeignClient fulfillmentFeignClient;
     @Mock
     private NotificationFeignClient notificationFeignClient;
     @Mock
@@ -72,8 +69,8 @@ class OrderReviewApplicationServiceTest {
     void setUp() {
         service = new OrderReviewApplicationService(
                 orderRepository, customerFeignClient, marketingFeignClient,
-                inventoryFeignClient, billingFeignClient, fulfillmentFeignClient,
-                notificationFeignClient, reviewDomainService, amountCalculator, promotionCalculator,
+                inventoryFeignClient, notificationFeignClient,
+                reviewDomainService, amountCalculator, promotionCalculator,
                 eventPublisher, orderEventPublisher);
     }
 
@@ -97,9 +94,8 @@ class OrderReviewApplicationServiceTest {
         verify(customerFeignClient).releaseCredit(any(), any());
         // 库存释放（逐 SKU）
         verify(inventoryFeignClient).release("SKU001", BigDecimal.TEN);
-        // 不触发库存预占/账单/履约/通知
+        // 不触发库存预占（M3 异步化后 billing/fulfillment 由 Kafka 消费，不再 Feign 调用）
         verify(inventoryFeignClient, never()).reserve(any(), any());
-        verify(billingFeignClient, never()).transfer(any());
         assertEquals(OrderStatus.REJECTED, order.getStatus());
         assertEquals("信用不足", order.getRejectReason());
     }
@@ -126,7 +122,7 @@ class OrderReviewApplicationServiceTest {
     }
 
     @Test
-    @DisplayName("审单通过：信用校验通过后逐 SKU 预占库存")
+    @DisplayName("审单通过：同步预占库存 + 信用占用后确认，事件写入 outbox（M3 异步化）")
     void shouldReserveInventoryOnApprove() {
         Order order = pendingOrder();
         when(orderRepository.findById(new OrderId("ord-001"))).thenReturn(Optional.of(order));
@@ -137,18 +133,16 @@ class OrderReviewApplicationServiceTest {
                 .thenReturn(ApiResponse.ok(new PriceQuoteResult("SKU001", BigDecimal.valueOf(50), "CNY")));
         when(inventoryFeignClient.reserve("SKU001", BigDecimal.TEN))
                 .thenReturn(ApiResponse.ok(null));
-        when(billingFeignClient.transfer(any()))
-                .thenReturn(ApiResponse.ok(null));
-        when(fulfillmentFeignClient.create(any()))
-                .thenReturn(ApiResponse.ok(null));
-        when(notificationFeignClient.send(any()))
+        // 信用占用（F-403/N-301，approve 编排链的一环，须 mock 否则返回 null 被判失败）
+        when(customerFeignClient.occupyCredit(any(), any()))
                 .thenReturn(ApiResponse.ok(null));
 
         service.review(new OrderReviewCommand("ord-001", true, null, "ops-01"));
 
+        // 同步编排：预占库存 + 信用占用
         verify(inventoryFeignClient).reserve("SKU001", BigDecimal.TEN);
-        verify(billingFeignClient).transfer(any());
-        verify(fulfillmentFeignClient).create(any());
+        // M3 异步化：不再同步调用 billing/fulfillment，改为 outbox 事件
+        verify(orderEventPublisher).publishOrderEvent(any());
         assertEquals(OrderStatus.CONFIRMED, order.getStatus());
     }
 }

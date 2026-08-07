@@ -23,9 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <p>TODO（学习任务）：</p>
  * <ul>
- *   <li>回传失败重试（账单模块重推或定时对账补偿，对应 F-701）</li>
- *   <li>消息队列化：回传走 MQ 而非同步 Feign（里程碑 M3）</li>
+ *   <li>回传失败重试：M3 已实现 Kafka 重试+DLQ（指数退避约 3 次），DLT 消息由对账任务兜底（F-701）</li>
  * </ul>
+ *
+ * <p>M3 异步化（已完成）：回传从 Feign 同步改为 Kafka billing-events 主题异步消费，
+ * 由 {@link com.demetrius.tribunal.order.infrastructure.listener.BillingEventConsumer} 接收后调用本服务。</p>
  */
 @Service
 public class BillStatusCallbackApplicationService {

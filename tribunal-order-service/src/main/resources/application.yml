@@ -17,8 +17,15 @@ spring:
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
     consumer:
       group-id: order-service
+      auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+# M3 异步化：本地消息表中继开关（测试/无 Kafka 环境可关闭）
+tribunal:
+  outbox:
+    relay:
+      enabled: ${OUTBOX_RELAY_ENABLED:true}
 
 # customer-service 地址（Feign 直连；接入 Nacos 后可去掉 url 用服务名路由）
 customer:

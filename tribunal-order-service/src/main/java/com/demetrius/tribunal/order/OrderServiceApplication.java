@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.retry.annotation.EnableRetry;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * tribunal-order-service 启动类（订单/审单领域微服务）
@@ -12,6 +13,7 @@ import org.springframework.retry.annotation.EnableRetry;
 @SpringBootApplication
 @EnableFeignClients
 @EnableRetry
+@EnableScheduling
 @MapperScan("com.demetrius.tribunal.order.infrastructure.mapper")
 public class OrderServiceApplication {
 
