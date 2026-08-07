@@ -1,0 +1,2 @@
+com.demetrius.tribunal.common.auth.AuthAutoConfiguration
+com.demetrius.tribunal.common.autoconfigure.MybatisPlusAutoConfiguration
