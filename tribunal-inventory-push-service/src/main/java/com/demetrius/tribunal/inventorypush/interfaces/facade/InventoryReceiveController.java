@@ -1,8 +1,8 @@
 package com.demetrius.tribunal.inventorypush.interfaces.facade;
 
 import com.demetrius.tribunal.inventorypush.application.service.InventoryReceiveApplicationService;
-import com.demetrius.tribunal.inventorypush.common.dto.InventoryReceiveRequest;
-import com.demetrius.tribunal.inventorypush.common.response.ApiResponse;
+import com.demetrius.tribunal.common.dto.inventory.InventoryReceiveRequest;
+import com.demetrius.tribunal.common.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

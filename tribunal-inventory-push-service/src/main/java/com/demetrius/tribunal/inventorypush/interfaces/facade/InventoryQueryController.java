@@ -1,8 +1,8 @@
 package com.demetrius.tribunal.inventorypush.interfaces.facade;
 
 import com.demetrius.tribunal.inventorypush.application.service.InventoryQueryApplicationService;
-import com.demetrius.tribunal.inventorypush.common.dto.InventorySkuView;
-import com.demetrius.tribunal.inventorypush.common.response.ApiResponse;
+import com.demetrius.tribunal.common.dto.inventory.InventorySkuView;
+import com.demetrius.tribunal.common.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;

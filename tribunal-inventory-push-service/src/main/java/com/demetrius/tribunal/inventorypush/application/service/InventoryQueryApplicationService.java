@@ -1,7 +1,7 @@
 package com.demetrius.tribunal.inventorypush.application.service;
 
-import com.demetrius.tribunal.inventorypush.common.dto.InventorySkuView;
-import com.demetrius.tribunal.inventorypush.common.exception.BizException;
+import com.demetrius.tribunal.common.dto.inventory.InventorySkuView;
+import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.inventorypush.domain.model.InventorySku;
 import com.demetrius.tribunal.inventorypush.domain.repository.InventorySkuRepository;
 import org.springframework.stereotype.Service;
