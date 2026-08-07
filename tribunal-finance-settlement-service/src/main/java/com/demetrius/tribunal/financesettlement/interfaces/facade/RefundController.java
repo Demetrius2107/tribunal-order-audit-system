@@ -1,8 +1,8 @@
 package com.demetrius.tribunal.financesettlement.interfaces.facade;
 
 import com.demetrius.tribunal.financesettlement.application.service.RefundApplicationService;
-import com.demetrius.tribunal.financesettlement.common.dto.RefundApplyRequest;
-import com.demetrius.tribunal.financesettlement.common.response.ApiResponse;
+import com.demetrius.tribunal.common.dto.finance.RefundApplyRequest;
+import com.demetrius.tribunal.common.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

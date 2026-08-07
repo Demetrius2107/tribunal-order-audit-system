@@ -1,7 +1,7 @@
 package com.demetrius.tribunal.financesettlement.application.service;
 
-import com.demetrius.tribunal.financesettlement.common.dto.RefundApplyRequest;
-import com.demetrius.tribunal.financesettlement.common.exception.BizException;
+import com.demetrius.tribunal.common.dto.finance.RefundApplyRequest;
+import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.financesettlement.domain.model.RefundRecord;
 import com.demetrius.tribunal.financesettlement.domain.model.SettlementOrder;
 import com.demetrius.tribunal.financesettlement.domain.repository.RefundRecordRepository;

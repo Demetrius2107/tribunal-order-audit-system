@@ -1,8 +1,8 @@
 package com.demetrius.tribunal.financesettlement.interfaces.facade;
 
 import com.demetrius.tribunal.financesettlement.application.service.SettlementApplicationService;
-import com.demetrius.tribunal.financesettlement.common.dto.SettlementView;
-import com.demetrius.tribunal.financesettlement.common.response.ApiResponse;
+import com.demetrius.tribunal.common.dto.finance.SettlementView;
+import com.demetrius.tribunal.common.response.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;

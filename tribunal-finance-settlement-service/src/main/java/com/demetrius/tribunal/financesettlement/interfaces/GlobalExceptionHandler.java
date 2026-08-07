@@ -1,7 +1,7 @@
 package com.demetrius.tribunal.financesettlement.interfaces;
 
-import com.demetrius.tribunal.financesettlement.common.exception.BizException;
-import com.demetrius.tribunal.financesettlement.common.response.ApiResponse;
+import com.demetrius.tribunal.common.exception.BizException;
+import com.demetrius.tribunal.common.response.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
