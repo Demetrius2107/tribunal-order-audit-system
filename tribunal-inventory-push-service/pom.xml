@@ -16,10 +16,10 @@
     <description>库存推送系统（上游数据集成网关：接收/清洗/转换/幂等/分发/对账）</description>
 
     <dependencies>
-        <!-- 使用本系统独立 common，不复用订单系统的 tribunal-order-common -->
+        <!-- R1 共享内核：core（响应/异常/库存推送 DTO）。独立系统不接鉴权，仅需 core -->
         <dependency>
             <groupId>com.demetrius</groupId>
-            <artifactId>tribunal-inventory-push-common</artifactId>
+            <artifactId>tribunal-common-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

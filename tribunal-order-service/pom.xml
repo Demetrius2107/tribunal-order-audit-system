@@ -16,9 +16,14 @@
     <description>订单/审单领域微服务（订单聚合、状态机、审单）</description>
 
     <dependencies>
+        <!-- R1 共享内核：core（响应/异常/DTO）+ starter（鉴权/MybatisPlus 自动装配） -->
         <dependency>
             <groupId>com.demetrius</groupId>
-            <artifactId>tribunal-order-common</artifactId>
+            <artifactId>tribunal-common-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.demetrius</groupId>
+            <artifactId>tribunal-common-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
