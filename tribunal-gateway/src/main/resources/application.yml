@@ -43,7 +43,7 @@ spring:
         - id: marketing-service
           uri: lb://tribunal-order-marketing-service
           predicates:
-            - Path=/api/marketing/**,/api/promotions/**,/api/deposits/**
+            - Path=/api/marketing/**,/api/promotions/**,/api/deposits/**,/api/coupons/**
         # 履约服务
         - id: fulfillment-service
           uri: lb://tribunal-order-fulfillment-service

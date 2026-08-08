@@ -83,3 +83,63 @@ INSERT INTO t_deposit_rule (id, sku_code, packaging_type, unit_deposit, included
 ('DR001', 'SKU001', 'BOTTLE', 2.00, 0, 1),
 ('DR002', 'SKU002', 'BOX', 10.00, 0, 1),
 ('DR003', 'SKU003', 'TRAY', 50.00, 0, 1);
+
+-- ------------------------------------------------------------
+-- 4. 优惠券模板表（M4优惠券：定义券的规则 + 防刷限额）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_coupon_template;
+CREATE TABLE t_coupon_template (
+    id                VARCHAR(64)   NOT NULL COMMENT '主键',
+    template_no       VARCHAR(64)   NOT NULL COMMENT '券模板编号',
+    name              VARCHAR(128)  NOT NULL COMMENT '券模板名称',
+    type              VARCHAR(32)   NOT NULL COMMENT '券类型（FULL_REDUCTION/DISCOUNT）',
+    threshold         DECIMAL(18,2) NULL COMMENT '满减门槛（FULL_REDUCTION专用）',
+    deduction_amount  DECIMAL(18,2) NULL COMMENT '满减金额（FULL_REDUCTION专用）',
+    discount_rate     DECIMAL(5,4)  NULL COMMENT '折扣率（DISCOUNT专用，0.9=九折）',
+    total_quota       INT           NULL COMMENT '总发放量（NULL=不限）',
+    per_user_limit    INT           NOT NULL DEFAULT 1 COMMENT '每人限领数量',
+    issued_count      INT           NOT NULL DEFAULT 0 COMMENT '已发放数量（防超发）',
+    valid_start_time  DATETIME      NULL COMMENT '有效期开始',
+    valid_end_time    DATETIME      NULL COMMENT '有效期结束',
+    active            TINYINT       NOT NULL DEFAULT 1 COMMENT '是否启用',
+    create_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    deleted           TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0否1是',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_template_no (template_no),
+    KEY idx_active (active)
+) ENGINE = InnoDB COMMENT = '优惠券模板表（M4优惠券）';
+
+-- 测试数据：满100减10（每人限领2张）、全单九五折
+INSERT INTO t_coupon_template (id, template_no, name, type, threshold, deduction_amount, discount_rate, total_quota, per_user_limit, issued_count, valid_start_time, valid_end_time, active) VALUES
+('CT001', 'CT-001', '满100减10', 'FULL_REDUCTION', 100.00, 10.00, NULL, 1000, 2, 0, '2026-01-01 00:00:00', '2026-12-31 23:59:59', 1),
+('CT002', 'CT-002', '全场九五折', 'DISCOUNT', NULL, NULL, 0.9500, 500, 1, 0, '2026-01-01 00:00:00', '2026-12-31 23:59:59', 1);
+
+-- ------------------------------------------------------------
+-- 5. 用户券表（用户领取的券实例，含状态机）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_user_coupon;
+CREATE TABLE t_user_coupon (
+    id                VARCHAR(64)   NOT NULL COMMENT '主键',
+    coupon_code       VARCHAR(64)   NOT NULL COMMENT '券码（核销凭此码）',
+    template_id       VARCHAR(64)   NOT NULL COMMENT '来源券模板ID',
+    template_no       VARCHAR(64)   NOT NULL COMMENT '来源券模板编号（冗余）',
+    customer_id       VARCHAR(64)   NOT NULL COMMENT '领用人ID',
+    type              VARCHAR(32)   NOT NULL COMMENT '券类型快照（从模板冗余）',
+    threshold         DECIMAL(18,2) NULL COMMENT '满减门槛快照',
+    deduction_amount  DECIMAL(18,2) NULL COMMENT '满减金额快照',
+    discount_rate     DECIMAL(5,4)  NULL COMMENT '折扣率快照',
+    status            VARCHAR(32)   NOT NULL DEFAULT 'AVAILABLE' COMMENT '状态（AVAILABLE/LOCKED/USED/EXPIRED）',
+    order_id          VARCHAR(64)   NULL COMMENT '使用/锁定时关联订单ID',
+    receive_time      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '领取时间',
+    valid_start_time  DATETIME      NULL COMMENT '有效期开始（从模板复制）',
+    valid_end_time    DATETIME      NULL COMMENT '有效期结束（从模板复制）',
+    used_time         DATETIME      NULL COMMENT '核销时间',
+    deleted           TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0否1是',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_coupon_code (coupon_code),
+    KEY idx_customer (customer_id),
+    KEY idx_template (template_id),
+    KEY idx_status (status),
+    KEY idx_valid_end (valid_end_time)
+) ENGINE = InnoDB COMMENT = '用户券表（M4优惠券）';
