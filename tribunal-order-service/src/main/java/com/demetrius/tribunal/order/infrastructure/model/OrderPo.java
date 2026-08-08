@@ -43,6 +43,12 @@ public class OrderPo {
     /** 状态（与 OrderStatus.name() 对应） */
     private String status;
 
+    /** M4：父订单 ID（拆出的子单指向父单；普通单/父单为 null） */
+    private String parentOrderId;
+
+    /** M4：是否已被拆分（父单标志） */
+    private Boolean split;
+
     private BigDecimal totalAmount;
 
     private BigDecimal discountAmount;

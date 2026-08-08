@@ -22,6 +22,8 @@ CREATE TABLE t_order (
     car_pooling     TINYINT       NOT NULL DEFAULT 0 COMMENT '是否拼车订单 0否1是',
     car_pool_joined TINYINT       NOT NULL DEFAULT 0 COMMENT '是否已参与拼车 0否1是（已拼车不可关闭）',
     status          VARCHAR(32)   NOT NULL COMMENT '状态（TO_BE_CONFIRMED等）',
+    parent_order_id VARCHAR(64)   NULL COMMENT 'M4：父订单ID（拆出的子单指向父单；普通单/父单为NULL）',
+    split           TINYINT       NOT NULL DEFAULT 0 COMMENT 'M4：是否已被拆分（父单标志）0否1是',
     total_amount    DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '总金额',
     discount_amount DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '折扣金额',
     discount_pool_deduction DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '折扣池抵扣（用折扣池余额冲抵应付）',
@@ -36,7 +38,8 @@ CREATE TABLE t_order (
     PRIMARY KEY (id),
     UNIQUE KEY uk_order_no (order_no),
     KEY idx_customer (customer_id),
-    KEY idx_status (status)
+    KEY idx_status (status),
+    KEY idx_parent (parent_order_id)
 ) ENGINE = InnoDB COMMENT = '订单主表';
 
 -- ------------------------------------------------------------
@@ -51,6 +54,7 @@ CREATE TABLE t_order_sku (
     quantity    DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '数量',
     price       DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '单价',
     amount      DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '金额',
+    warehouse_id VARCHAR(64)  NULL COMMENT 'M4：寻源仓库ID（拆单时绑定）',
     create_time DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     deleted     TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0否1是',
     PRIMARY KEY (id),

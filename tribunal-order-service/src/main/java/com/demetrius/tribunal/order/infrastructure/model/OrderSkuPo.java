@@ -31,6 +31,9 @@ public class OrderSkuPo {
 
     private BigDecimal amount;
 
+    /** M4：寻源仓库 ID（拆单时绑定） */
+    private String warehouseId;
+
     private LocalDateTime createTime;
 
     @TableLogic
