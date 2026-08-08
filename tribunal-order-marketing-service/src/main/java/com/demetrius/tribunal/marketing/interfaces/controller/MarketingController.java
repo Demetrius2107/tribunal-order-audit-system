@@ -2,21 +2,17 @@ package com.demetrius.tribunal.marketing.interfaces.controller;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.marketing.application.dto.PriceQuoteResult;
+import com.demetrius.tribunal.marketing.application.dto.PromotionCalculateRequest;
+import com.demetrius.tribunal.marketing.application.dto.PromotionCalculateResponse;
 import com.demetrius.tribunal.marketing.application.service.MarketingApplicationService;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
 
 /**
- * 营销价格接口层（REST，供订单服务取价）。
+ * 营销接口层（REST，供订单服务取价/计价）。
  *
- * <p>对应需求：F-102（价格体系）、F-202（促销计算）。</p>
- *
- * <p>TODO（学习任务）：</p>
- * <ul>
- *   <li>促销计算接口（批量计价）</li>
- *   <li>押金查询接口</li>
- * </ul>
+ * <p>对应需求：F-102（价格体系）、F-202（促销引擎）、F-205（押金引擎）。</p>
  */
 @RestController
 @RequestMapping("/api/marketing")
@@ -27,6 +23,8 @@ public class MarketingController {
     public MarketingController(MarketingApplicationService marketingApplicationService) {
         this.marketingApplicationService = marketingApplicationService;
     }
+
+    // ===== 取价（F-102）=====
 
     /**
      * 取价：GET /api/marketing/price?skuCode=..&customerCode=..&customerGroupId=..&areaCode=..
@@ -40,6 +38,19 @@ public class MarketingController {
         BigDecimal price = marketingApplicationService.quotePrice(
                 skuCode, customerCode, customerGroupId, areaCode);
         return ApiResponse.ok(new PriceQuoteResult(skuCode, price, "CNY"));
+    }
+
+    // ===== 促销 + 押金联合计算（F-202 + F-205）=====
+
+    /**
+     * 计算促销与押金：POST /api/marketing/calculate
+     *
+     * <p>order-service 在下单/审单时调用，返回折扣金额、赠品、押金及分摊明细。</p>
+     */
+    @PostMapping("/calculate")
+    public ApiResponse<PromotionCalculateResponse> calculate(
+            @RequestBody PromotionCalculateRequest request) {
+        return ApiResponse.ok(marketingApplicationService.calculate(request));
     }
 
     /**

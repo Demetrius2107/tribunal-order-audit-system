@@ -1,8 +1,11 @@
 package com.demetrius.tribunal.order.client;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.order.client.fallback.MarketingFeignFallbackFactory;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.math.BigDecimal;
@@ -10,12 +13,11 @@ import java.math.BigDecimal;
 /**
  * 营销价格服务（marketing-service）的 Feign 客户端。
  *
- * <p>对应需求：F-102（价格体系）——上游"金额"数据源。</p>
- *
- * <p>用途：下单/审单时取价（客户价→客户组价→区域价），替代前端传入价格。</p>
+ * <p>对应需求：F-102（价格体系）、F-202（促销引擎）、F-205（押金引擎）。</p>
  */
 @FeignClient(name = "tribunal-order-marketing-service",
-        url = "${marketing.service.url:http://localhost:8084}")
+        url = "${marketing.service.url:http://localhost:8084}",
+        fallbackFactory = MarketingFeignFallbackFactory.class)
 public interface MarketingFeignClient {
 
     /**
@@ -26,4 +28,10 @@ public interface MarketingFeignClient {
                                              @RequestParam(value = "customerCode", required = false) String customerCode,
                                              @RequestParam(value = "customerGroupId", required = false) String customerGroupId,
                                              @RequestParam(value = "areaCode", required = false) String areaCode);
+
+    /**
+     * 促销 + 押金联合计算：POST /api/marketing/calculate
+     */
+    @PostMapping("/api/marketing/calculate")
+    ApiResponse<PromotionCalculateResponse> calculate(@RequestBody PromotionCalculateRequest request);
 }

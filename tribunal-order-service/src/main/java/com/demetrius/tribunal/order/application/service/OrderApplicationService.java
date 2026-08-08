@@ -6,6 +6,9 @@ import com.demetrius.tribunal.order.application.dto.OrderResult;
 import com.demetrius.tribunal.order.client.CustomerFeignClient;
 import com.demetrius.tribunal.order.client.InventoryFeignClient;
 import com.demetrius.tribunal.order.client.InventoryItemResult;
+import com.demetrius.tribunal.order.client.MarketingFeignClient;
+import com.demetrius.tribunal.order.client.PromotionCalculateRequest;
+import com.demetrius.tribunal.order.client.PromotionCalculateResponse;
 import com.demetrius.tribunal.order.domain.event.OrderCreatedEvent;
 import com.demetrius.tribunal.order.domain.event.OrderStatusChangedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
@@ -68,6 +71,8 @@ public class OrderApplicationService {
 
     private final InventoryFeignClient inventoryFeignClient;
 
+    private final MarketingFeignClient marketingFeignClient;
+
     private final OrderReviewDomainService reviewDomainService;
 
     private final DepositCalculator depositCalculator;
@@ -78,6 +83,7 @@ public class OrderApplicationService {
                                    ApplicationEventPublisher eventPublisher,
                                    CustomerFeignClient customerFeignClient,
                                    InventoryFeignClient inventoryFeignClient,
+                                   MarketingFeignClient marketingFeignClient,
                                    OrderReviewDomainService reviewDomainService,
                                    DepositCalculator depositCalculator,
                                    OrderIdempotencyGuard idempotencyGuard) {
@@ -85,6 +91,7 @@ public class OrderApplicationService {
         this.eventPublisher = eventPublisher;
         this.customerFeignClient = customerFeignClient;
         this.inventoryFeignClient = inventoryFeignClient;
+        this.marketingFeignClient = marketingFeignClient;
         this.reviewDomainService = reviewDomainService;
         this.depositCalculator = depositCalculator;
         this.idempotencyGuard = idempotencyGuard;
@@ -130,8 +137,8 @@ public class OrderApplicationService {
         if (command.shippingFee() != null && command.shippingFee().compareTo(BigDecimal.ZERO) > 0) {
             order.applyShippingFee(command.shippingFee());
         }
-        // 押金计算（F-205：按 SKU-客户押金配置计算押金，业务文档四节）
-        depositCalculator.applyDeposit(order, command.depositConfigBySku());
+        // 促销折扣 + 押金（F-202/F-205：调用 marketing-service 引擎计算，远程不可用时降级到本地押金）
+        applyPromotionAndDeposit(order, command);
 
         // 整托校验：SKU 数量必须是整托规格的倍数（业务文档五节 F-302，规格来自 SKU 主数据）
         reviewDomainService.validateWholePallet(order, command.palletSpecs());
@@ -148,6 +155,44 @@ public class OrderApplicationService {
                 order.getId(), order.getOrderNo(), order.getCustomerId(), order.getCreateTime()));
 
         return OrderResult.from(order);
+    }
+
+    /**
+     * 促销折扣 + 押金计算（F-202 + F-205）。
+     *
+     * <p>调用 marketing-service 一次返回促销折扣、赠品、押金及分摊明细。
+     * 远程不可用时降级到本地 DepositCalculator（保证下单主流程不被外部依赖阻断）。</p>
+     */
+    private void applyPromotionAndDeposit(Order order, OrderCreateCommand command) {
+        try {
+            List<PromotionCalculateRequest.SkuItemDto> skuItems = order.getSkus().stream()
+                    .map(s -> new PromotionCalculateRequest.SkuItemDto(
+                            s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
+                    .toList();
+            List<String> skuCodes = order.getSkus().stream()
+                    .map(OrderSku::getSkuCode).toList();
+            // customerCode/customerGroupId 从客户域获取，此处暂用 customerId 透传
+            PromotionCalculateRequest req = new PromotionCalculateRequest(
+                    command.customerId(), null, skuCodes, skuItems);
+            ApiResponse<PromotionCalculateResponse> resp = marketingFeignClient.calculate(req);
+            if (resp != null && resp.getData() != null) {
+                PromotionCalculateResponse data = resp.getData();
+                if (data.discountAmount() != null
+                        && data.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    order.applyDiscount(data.discountAmount());
+                }
+                if (data.depositAmount() != null
+                        && data.depositAmount().compareTo(BigDecimal.ZERO) > 0) {
+                    order.applyDeposit(data.depositAmount());
+                }
+                return;
+            }
+        } catch (Exception ex) {
+            log.warn("marketing-service 促销/押金计算失败 orderId={}, 降级到本地押金计算",
+                    order.getId().value(), ex);
+        }
+        // 降级：仅本地押金计算
+        depositCalculator.applyDeposit(order, command.depositConfigBySku());
     }
 
     /**
