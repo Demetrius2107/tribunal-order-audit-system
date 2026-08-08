@@ -1,50 +1,107 @@
-# tribunal-order-audit-system — B2B 订货全链路业务系统
+# tribunal-order-audit-system
 
-> **Author: Demetrius2107**
-> **Repository: https://github.com/Demetrius2107/tribunal-order-audit-system.git**
->
-> 面向 B2B 渠道订货场景的全链路业务系统，覆盖 **库存推送 → 订单审理 → 履约执行 → 金融结算** 完整业务流：
-> 上游物料/库存推送 → 经销商在线下单 → 销售按规则审单 → 生成金融账单完成财务处理 → 履约发货，状态全程回传。
->
-> **技术选型**：JDK 21 / Spring Boot 3.2.x / Spring Cloud OpenFeign / MyBatis-Plus / MySQL 8.x（每服务独立库）/ Kafka / Redis。
-> **架构形态**：领域驱动设计（DDD）分层 + 微服务形态，单仓库多模块（3 大系统 + 网关、15 个 Maven 模块，含共享内核）。
+[![JDK](https://img.shields.io/badge/JDK-21-orange)](https://adoptium.net/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.x-green)](https://spring.io/projects/spring-boot)
+[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2023.0.x-green)](https://spring.io/projects/spring-cloud)
+[![MyBatis-Plus](https://img.shields.io/badge/MyBatis--Plus-3.5.7-blue)](https://baomidou.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.x-blue)](https://www.mysql.com/)
+[![Kafka](https://img.shields.io/badge/Kafka-3.6-black)](https://kafka.apache.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
+**B2B 订货全链路业务系统** —— 覆盖 **库存推送 → 订单审理 → 履约执行 → 金融结算** 完整业务流。
 
-## 一、0806 版本概览
+上游物料/库存推送 → 经销商在线下单 → 销售按规则审单 → 生成金融账单完成财务处理 → 履约发货，状态全程回传。
 
-> 快照日期：2026-08-05 · 分支：master → `docs/0806-version-overview`
-
-### 当前已实现（✅）
-
-| 能力 | 状态 | 里程碑 |
-|------|------|--------|
-| 领域驱动设计四层架构（domain 零框架依赖） | ✅ | M0 |
-| 下单 + 状态机 + 状态流水 | ✅ | M1 |
-| 审单五合一编排（信用→取价→库存→账单→履约→通知） | ✅ | M2 |
-| 信用占用/释放闭环（审单通过占用，拒绝/取消释放） | ✅ | M2 |
-| 金融账单（生成/审核/结算/核销 + 状态回传驱动订单状态机） | ✅ | M2 |
-| JWT 双 Token + RBAC 接口级鉴权 | ✅ | M5（提前完成） |
-| Feign 重试（Retryer 3 次 + spring-retry） | ✅ | M2 |
-| 单元测试 46 用例（订单 19 + 认证 27） | ✅ | M1/M2 |
-| 需求编号 ↔ 代码实现映射表（按图索骥） | ✅ | - |
-
-### 待办（⬜ 按优先级）
-
-| 能力 | 里程碑 | 优先级 |
-|------|--------|--------|
-| Kafka 事件 + 本地消息表（异步化） | M3 | 高 |
-| 拆单/合单 | M4 | 高 |
-| 寻源分仓 | M4 | 中 |
-| 促销/折扣/押金引擎（配置化） | M4 | 中 |
-| Nacos 服务发现 + 网关 | M5 | 中 |
-| 熔断/降级（Resilience4j） | M5 | 中 |
-| 可观测性（日志/链路/监控/告警） | M6 | 低 |
-| 分库分表 | M7 | 低 |
+> **Author: Demetrius2107** · **Repository**: https://github.com/Demetrius2107/tribunal-order-audit-system.git
 
 ---
 
-## 二、当前架构（15 模块 / 3 大系统 + 网关）
+## 功能特性
+
+| 能力 | 说明 |
+|------|------|
+| 全链路业务闭环 | 库存推送 / 下单 / 审单 / 账单 / 履约 / 结算 / 通知，状态全程回传 |
+| 领域驱动设计四层架构 | `interfaces → application → domain ← infrastructure`，domain 层零框架依赖 |
+| 审单五合一编排 | 信用校验 → 取价 → 预占库存 → 生成账单 → 创建履约 → 通知，单次编排完成 |
+| 订单/账单状态机 | 两层幂等（状态机 + 唯一键），状态流水可追溯 |
+| 信用占用/释放闭环 | 审单通过占用，拒绝/取消释放，防超卖防透支 |
+| 金融账单全流程 | 生成 / 审核 / 结算 / 核销，回传驱动订单状态机 |
+| 统一鉴权 | JWT 双 Token + RBAC 接口级鉴权（M5 提前完成） |
+| 服务治理预留 | Feign 重试（Retryer 3 次 + spring-retry）、Nacos / 网关 / 熔断降级 |
+| 单仓库多模块 | 3 大系统 + 网关 + 共享内核，15 个 Maven 模块 |
+| 可观测性 | 结构化日志 / TraceId 全链路透传 / Prometheus + Grafana 指标监控 |
+
+---
+
+## 快速开始
+
+### 环境要求
+
+| 依赖 | 版本 |
+|------|------|
+| JDK | 21 |
+| Maven | 3.8+ |
+| MySQL | 8.x（每服务独立库，共 13 个） |
+| Docker（可选） | 中间件编排（MySQL/Nacos/Redis/Kafka/Prometheus/Grafana） |
+
+> 中间件一键启动：`docker-compose up -d`（含 Prometheus 监控）
+
+### 1. 建库建表（13 份 SQL 按序执行）
+
+```bash
+for f in docs/sql/*.sql; do mysql -uroot -p < "$f"; done
+```
+
+### 2. 修改各服务数据库账号密码
+
+编辑各服务 `src/main/resources/application.yml` 中的 `datasource` 配置。
+
+### 3. 启动服务（依赖下游先行；order-service 最后）
+
+```bash
+mvn -pl tribunal-order-auth-service spring-boot:run        # 8087
+mvn -pl tribunal-order-customer-service spring-boot:run    # 8081
+mvn -pl tribunal-order-inventory-service spring-boot:run   # 8083
+mvn -pl tribunal-order-marketing-service spring-boot:run   # 8084
+mvn -pl tribunal-order-billing-service spring-boot:run     # 8082
+mvn -pl tribunal-order-fulfillment-service spring-boot:run # 8085
+mvn -pl tribunal-order-notification-service spring-boot:run# 8086
+mvn -pl tribunal-order-task-service spring-boot:run        # 8088
+mvn -pl tribunal-order-service spring-boot:run             # 8080（最后，编排中心）
+```
+
+---
+
+## 使用示例
+
+完整链路脚本见 `docs/api-test/审单链路验证.http`（IDEA HTTP Client 格式，按顺序点击执行）：
+
+```http
+### 登录获取 Token
+POST http://localhost:8087/api/auth/login
+Content-Type: application/json
+
+{ "username": "dealer001", "password": "123456" }
+
+### 下单
+POST http://localhost:8080/api/orders
+Content-Type: application/json
+Authorization: Bearer <accessToken>
+
+{ "customerId": "cust-001", "items": [{ "skuCode": "SKU-001", "quantity": 10 }] }
+
+### 审单（触发五合一编排）
+POST http://localhost:8080/api/orders/{id}/review
+
+### 账单结算（回传订单状态机）
+POST http://localhost:8082/api/bills/{id}/settle
+```
+
+---
+
+## 架构概览
+
+### 模块结构（15 模块 / 3 大系统 + 网关）
 
 ```
 tribunal-order-audit-system（父工程，packaging=pom）
@@ -74,10 +131,6 @@ tribunal-order-audit-system（父工程，packaging=pom）
 └── 【网关】tribunal-gateway/              # M5：统一入口/路由/Nacos 服务发现/JWT 前置鉴权
 ```
 
-- 技术栈：JDK 21 / Spring Boot 3.2.x / Spring Cloud 2023.0.x + OpenFeign / MyBatis-Plus 3.5.7 / MySQL 8.x（每服务独立库）
-- 依赖规则（不可违反）：`interfaces → application → domain ← infrastructure`，领域层不 import 任何 Spring/MyBatis 类
-- 服务间协作：Feign 同步调用（信用/取价/库存/账单/履约/通知），url 直连待升级 Nacos
-
 ### 审单五合一编排（order-service 核心链路）
 
 ```
@@ -93,19 +146,18 @@ tribunal-order-audit-system（父工程，packaging=pom）
 
 **状态回传闭环**：billing 结算/核销 → 回传 order → 订单状态机推进；fulfillment 发货/签收 → 回传 order → 终态。
 
+### 技术栈
+
+JDK 21 / Spring Boot 3.2.x / Spring Cloud 2023.0.x + OpenFeign / MyBatis-Plus 3.5.7 / MySQL 8.x（每服务独立库）/ Kafka / Redis / Nacos / Docker Compose
+
 ---
 
-## 三、路线图
+## 路线图
 
-### 3.1 里程碑（按《需求规格说明书-生产级目标》M0~M7）
+### 里程碑（M0~M7）
 
-```
-M0 → M1 → M2 → M3 → M4
-                ↘ M5 → M6 → M7
-```
-
-| 里程碑 | 主题 | 状态 / 关键动作 |
-|--------|------|-----------------|
+| 里程碑 | 主题 | 状态 |
+|--------|------|------|
 | M0 | 架构底座（领域驱动设计四层 + 统一响应/异常） | ✅ 完成 |
 | M1 | 订单核心闭环（下单/状态机/流水） | ✅ 完成 |
 | M2 | 审单编排 + 收尾（信用/库存/账单/履约 + Feign 重试） | ✅ 完成 |
@@ -115,13 +167,7 @@ M0 → M1 → M2 → M3 → M4
 | M6 | 可观测与运维（日志/链路/监控/告警/CI-CD/压测） | ⬜ |
 | M7 | 生产加固（分库分表 / 归档 / 容灾 / 安全加固） | ⬜ |
 
-### 3.2 重构阶段（按《开发计划与里程碑》R1~R6）
-
-```
-R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业务补全）
-                                      ↓
-                               R5（微服务治理）→ R6（可观测加固）
-```
+### 重构阶段（R1~R6）
 
 | 阶段 | 主题 | 周期 | 核心目标 |
 |------|------|------|----------|
@@ -136,7 +182,7 @@ R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业
 
 ---
 
-## 四、文档索引（docs/ 共 18 份，按类型分目录）
+## 文档索引（docs/ 共 18 份，按类型分目录）
 
 | 分类 | 文档 | 用途 |
 |------|------|------|
@@ -158,48 +204,22 @@ R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业
 | 指南 | 指南/数据流转验证指南.md | 四层验证策略 + .http 链路脚本 |
 | 指南 | 指南/M4业务补全与M6可观测性-开发记录.md | M4 拆单/合单/售后退货 + M6 可观测性落地记录 |
 | 指南 | 指南/0806-执行计划.md | 主线开发步骤 + 验收标准（从代码真实状态出发） |
-| 脚本 | sql/*.sql | 13 份建库建表脚本（docs/sql/，按序执行，见第五节） |
+| 脚本 | sql/*.sql | 13 份建库建表脚本（docs/sql/，按序执行，见快速开始） |
 | 验证 | api-test/审单链路验证.http | IDEA HTTP Client 链路验证脚本（docs/api-test/，下单→审单→账单→履约） |
 
 ---
 
-## 五、本地启动与联调
+## 贡献指南
 
-```bash
-# 1. 建库建表（13 份 SQL 按序执行）
-for f in docs/sql/*.sql; do mysql -uroot -p < "$f"; done
-
-# 2. 修改各服务 application.yml 数据库账号密码
-
-# 3. 启动（依赖下游先行；order-service 最后）
-mvn -pl tribunal-order-auth-service spring-boot:run        # 8087
-mvn -pl tribunal-order-customer-service spring-boot:run    # 8081
-mvn -pl tribunal-order-inventory-service spring-boot:run   # 8083
-mvn -pl tribunal-order-marketing-service spring-boot:run   # 8084
-mvn -pl tribunal-order-billing-service spring-boot:run     # 8082
-mvn -pl tribunal-order-fulfillment-service spring-boot:run # 8085
-mvn -pl tribunal-order-notification-service spring-boot:run# 8086
-mvn -pl tribunal-order-task-service spring-boot:run        # 8088
-mvn -pl tribunal-order-service spring-boot:run             # 8080（最后，编排中心）
-
-# 4. 联调验证（建议用例）
-# ① 登录取 Token：POST /api/auth/login
-# ② 物料入库：POST /api/inventory/items
-# ③ 价格配置：POST /api/marketing/price
-# ④ 下单：POST /api/orders（状态=待确认）
-# ⑤ 审单：POST /api/orders/{id}/review（触发五合一编排）
-# ⑥ 账单结算：POST /api/bills/{id}/settle（回传订单状态机）
-# ⑦ 履约发货/签收：POST /api/fulfillments/{id}/ship、/sign
-# 完整脚本见 docs/api-test/审单链路验证.http
-```
+1. **按图索骥**：每个需求编号（F-/N-/Q-）都能在《需求编号与代码实现映射表》里找到代码位置和实现状态
+2. **遵守分层约束**：领域层不 import 任何 Spring/MyBatis 类（`interfaces → application → domain ← infrastructure`）
+3. **跨服务用 DTO**：Feign 返回用 common 的 DTO，不跨服务传领域对象
+4. **写测试**：状态机/金额计算必须有单元测试（合法/非法/重复状态迁移），当前 46 用例是底线
+5. **验证链路用 .http 脚本**：按《数据流转验证指南》用 IDEA HTTP Client 扮演各角色，避免手动点 Postman
+6. 提交遵循 Conventional Commits（`feat`/`fix`/`docs`/`refactor`/`test`/`build`/`ci`）
 
 ---
 
-## 六、给开发者的提示
+## License
 
-1. **按图索骥**：每个需求编号（F-/N-/Q-）都能在《需求编号与代码实现映射表》里找到代码位置和实现状态
-2. **领域层不要 import Spring**：Order/OrderStatus/FinanceBill 是纯 Java 类，一旦用了 `@Service`/Mapper 说明分层被破坏
-3. **跨服务边界用 DTO 不用领域对象**：Feign 返回用 common 的 DTO，不跨服务传领域类
-4. **状态机是核心中的核心**：订单/账单状态机 = "状态机 + 唯一键" 两层幂等，花最多时间理解 `OrderStatus`
-5. **写完一个功能跑一个测试**：给状态机/金额计算写单元测试（合法/非法/重复状态迁移），当前 46 用例是底线
-6. **验证链路用 .http 脚本**：按《数据流转验证指南》用 IDEA HTTP Client 扮演各角色，避免手动点 Postman
+[MIT](LICENSE) © 2026 Demetrius2107

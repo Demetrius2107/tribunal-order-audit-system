@@ -1,50 +1,107 @@
-# tribunal-order-audit-system — B2B 発注フルチェーン業務システム
+# tribunal-order-audit-system
 
-> **Author: Demetrius2107**
-> **Repository: https://github.com/Demetrius2107/tribunal-order-audit-system.git**
->
-> B2B チャネル発注シーン向けのフルチェーン業務システムで、**在庫プッシュ → 注文審査 → 履行（フルフィルメント） → 金融決済** の完全な業務フローをカバーします：
-> 上流の物料/在庫プッシュ → ディーラーがオンラインで注文 → 営業担当がルールに基づき審査 → 金融請求書を生成して財務処理 → 履行・出荷、ステータスは全行程でコールバック。
->
-> **技術スタック**：JDK 21 / Spring Boot 3.2.x / Spring Cloud OpenFeign / MyBatis-Plus / MySQL 8.x（サービスごとに独立 DB）/ Kafka / Redis。
-> **アーキテクチャ形態**：ドメイン駆動設計（DDD）レイヤリング + マイクロサービス形態、単一リポジトリ・複数モジュール（3 システム + ゲートウェイ、15 個の Maven モジュール、共有カーネル含む）。
+[![JDK](https://img.shields.io/badge/JDK-21-orange)](https://adoptium.net/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.2.x-green)](https://spring.io/projects/spring-boot)
+[![Spring Cloud](https://img.shields.io/badge/Spring%20Cloud-2023.0.x-green)](https://spring.io/projects/spring-cloud)
+[![MyBatis-Plus](https://img.shields.io/badge/MyBatis--Plus-3.5.7-blue)](https://baomidou.com/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.x-blue)](https://www.mysql.com/)
+[![Kafka](https://img.shields.io/badge/Kafka-3.6-black)](https://kafka.apache.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
----
+**B2B 発注フルチェーン業務システム** — **在庫プッシュ → 注文審査 → 履行（フルフィルメント） → 金融決済** の完全な業務フローをカバー。
 
-## 一、0806 バージョン概要
+上流の物料/在庫プッシュ → ディーラーがオンラインで注文 → 営業担当がルールに基づき審査 → 金融請求書を生成して財務処理 → 履行・出荷、ステータスは全行程でコールバック。
 
-> スナップショット日：2026-08-05 · ブランチ：master → `docs/0806-version-overview`
-
-### 実装済み（✅）
-
-| 機能 | 状態 | マイルストーン |
-|------|------|--------|
-| ドメイン駆動設計 4 層アーキテクチャ（domain 層はフレームワーク依存ゼロ） | ✅ | M0 |
-| 注文登録 + ステートマシン + 状態遷移ログ | ✅ | M1 |
-| 審査 5-in-1 オーケストレーション（信用→価格→在庫→請求→履行→通知） | ✅ | M2 |
-| 信用予約/解放ループ（審査通過で予約、拒否/キャンセルで解放） | ✅ | M2 |
-| 金融請求書（生成/審査/決済/消込 + ステータスコールバックで注文ステートマシン駆動） | ✅ | M2 |
-| JWT デュアルトークン + RBAC インターフェースレベル認証 | ✅ | M5（前倒し完了） |
-| Feign リトライ（Retryer 3 回 + spring-retry） | ✅ | M2 |
-| ユニットテスト 46 ケース（注文 19 + 認証 27） | ✅ | M1/M2 |
-| 要件番号 ↔ コード実装マッピング表（トレーサビリティ） | ✅ | - |
-
-### バックログ（⬜ 優先度順）
-
-| 機能 | マイルストーン | 優先度 |
-|------|--------|--------|
-| Kafka イベント + ローカルメッセージテーブル（非同期化） | M3 | 高 |
-| 注文分割/結合 | M4 | 高 |
-| 倉庫ソーシング・配分 | M4 | 中 |
-| プロモーション/割引/デポジットエンジン（設定可能） | M4 | 中 |
-| Nacos サービスディスカバリ + ゲートウェイ | M5 | 中 |
-| サーキットブレーカー/縮退（Resilience4j） | M5 | 中 |
-| 可観測性（ログ/トレース/監視/アラート） | M6 | 低 |
-| データベースシャーディング | M7 | 低 |
+> **Author: Demetrius2107** · **Repository**: https://github.com/Demetrius2107/tribunal-order-audit-system.git
 
 ---
 
-## 二、現在のアーキテクチャ（15 モジュール / 3 システム + ゲートウェイ）
+## 機能特性
+
+| 機能 | 説明 |
+|------|------|
+| フルチェーン業務ループ | 在庫プッシュ / 注文 / 審査 / 請求 / 履行 / 決済 / 通知、ステータスは全行程でコールバック |
+| ドメイン駆動設計 4 層アーキテクチャ | `interfaces → application → domain ← infrastructure`、domain 層はフレームワーク依存ゼロ |
+| 審査 5-in-1 オーケストレーション | 信用チェック → 価格チェック → 在庫予約 → 請求書生成 → 履行作成 → 通知をワンパスで実行 |
+| 注文/請求書ステートマシン | 2 層冪等（ステートマシン + ユニークキー）、状態遷移ログを追跡可能 |
+| 信用予約/解放ループ | 審査通過で予約、拒否/キャンセルで解放、売り切れ・過剰融資を防止 |
+| 金融請求書フルフロー | 生成 / 審査 / 決済 / 消込、コールバックで注文ステートマシンを駆動 |
+| 統一認証 | JWT デュアルトークン + RBAC インターフェースレベル認証（M5 前倒し完了） |
+| サービスガバナンス予定 | Feign リトライ（Retryer 3 回 + spring-retry）、Nacos / ゲートウェイ / サーキットブレーカー |
+| 単一リポジトリ・複数モジュール | 3 システム + ゲートウェイ + 共有カーネル、15 個の Maven モジュール |
+| 可観測性 | 構造化ログ / TraceId フルリンク透過 / Prometheus + Grafana メトリクス |
+
+---
+
+## クイックスタート
+
+### 前提条件
+
+| 依存 | バージョン |
+|------|------|
+| JDK | 21 |
+| Maven | 3.8+ |
+| MySQL | 8.x（サービスごとに独立 DB、計 13 個） |
+| Docker（任意） | ミドルウェアオーケストレーション（MySQL/Nacos/Redis/Kafka/Prometheus/Grafana） |
+
+> ミドルウェア一括起動：`docker-compose up -d`（Prometheus 監視を含む）
+
+### 1. DB・テーブル作成（13 個の SQL スクリプトを順に実行）
+
+```bash
+for f in docs/sql/*.sql; do mysql -uroot -p < "$f"; done
+```
+
+### 2. 各サービスの DB アカウント/パスワードを変更
+
+各サービスの `src/main/resources/application.yml` の `datasource` セクションを編集。
+
+### 3. サービス起動（下流サービス優先；order-service は最後）
+
+```bash
+mvn -pl tribunal-order-auth-service spring-boot:run        # 8087
+mvn -pl tribunal-order-customer-service spring-boot:run    # 8081
+mvn -pl tribunal-order-inventory-service spring-boot:run   # 8083
+mvn -pl tribunal-order-marketing-service spring-boot:run   # 8084
+mvn -pl tribunal-order-billing-service spring-boot:run     # 8082
+mvn -pl tribunal-order-fulfillment-service spring-boot:run # 8085
+mvn -pl tribunal-order-notification-service spring-boot:run# 8086
+mvn -pl tribunal-order-task-service spring-boot:run        # 8088
+mvn -pl tribunal-order-service spring-boot:run             # 8080（最後、オーケストレーションセンター）
+```
+
+---
+
+## 使用例
+
+完全なフロースクリプト：`docs/api-test/审单链路验证.http`（IDEA HTTP Client 形式、順にクリックして実行）：
+
+```http
+### ログインしてトークン取得
+POST http://localhost:8087/api/auth/login
+Content-Type: application/json
+
+{ "username": "dealer001", "password": "123456" }
+
+### 注文登録
+POST http://localhost:8080/api/orders
+Content-Type: application/json
+Authorization: Bearer <accessToken>
+
+{ "customerId": "cust-001", "items": [{ "skuCode": "SKU-001", "quantity": 10 }] }
+
+### 審査（5-in-1 オーケストレーション発動）
+POST http://localhost:8080/api/orders/{id}/review
+
+### 請求書決済（注文ステートマシンへコールバック）
+POST http://localhost:8082/api/bills/{id}/settle
+```
+
+---
+
+## アーキテクチャ概要
+
+### モジュール構成（15 モジュール / 3 システム + ゲートウェイ）
 
 ```
 tribunal-order-audit-system（親プロジェクト、packaging=pom）
@@ -74,10 +131,6 @@ tribunal-order-audit-system（親プロジェクト、packaging=pom）
 └── 【ゲートウェイ】tribunal-gateway/      # M5：統一エントリ/ルーティング/Nacos ディスカバリ/JWT 事前認証
 ```
 
-- 技術スタック：JDK 21 / Spring Boot 3.2.x / Spring Cloud 2023.0.x + OpenFeign / MyBatis-Plus 3.5.7 / MySQL 8.x（サービスごとに独立 DB）
-- 依存ルール（違反不可）：`interfaces → application → domain ← infrastructure`、domain 層は Spring/MyBatis クラスを一切 import しない
-- サービス間連携：Feign 同期呼び出し（信用/価格/在庫/請求/履行/通知）、url 直結で当面は Nacos へのアップグレード待ち
-
 ### 審査 5-in-1 オーケストレーション（order-service のコアフロー）
 
 ```
@@ -93,19 +146,18 @@ tribunal-order-audit-system（親プロジェクト、packaging=pom）
 
 **ステータスコールバックループ**：billing 決済/消込 → order へコールバック → 注文ステートマシン進行；fulfillment 出荷/受領 → order へコールバック → 終端状態。
 
+### 技術スタック
+
+JDK 21 / Spring Boot 3.2.x / Spring Cloud 2023.0.x + OpenFeign / MyBatis-Plus 3.5.7 / MySQL 8.x（サービスごとに独立 DB）/ Kafka / Redis / Nacos / Docker Compose
+
 ---
 
-## 三、ロードマップ
+## ロードマップ
 
-### 3.1 マイルストーン（「本番品質要件仕様書」M0~M7 準拠）
+### マイルストーン（M0~M7）
 
-```
-M0 → M1 → M2 → M3 → M4
-                ↘ M5 → M6 → M7
-```
-
-| マイルストーン | テーマ | 状態 / 主要アクション |
-|--------|------|-----------------|
+| マイルストーン | テーマ | 状態 |
+|--------|------|------|
 | M0 | アーキテクチャ基盤（ドメイン駆動設計 4 層 + 統一レスポンス/例外） | ✅ 完了 |
 | M1 | 注文コアループ（登録/ステートマシン/遷移ログ） | ✅ 完了 |
 | M2 | 審査オーケストレーション + 仕上げ（信用/在庫/請求/履行 + Feign リトライ） | ✅ 完了 |
@@ -115,13 +167,7 @@ M0 → M1 → M2 → M3 → M4
 | M6 | 可観測性と運用（ログ/トレース/監視/アラート/CI-CD/負荷テスト） | ⬜ |
 | M7 | 本番強化（シャーディング / アーカイブ / 災害対策 / セキュリティ強化） | ⬜ |
 
-### 3.2 リファクタリングフェーズ（「開発計画とマイルストーン」R1~R6 準拠）
-
-```
-R1（カーネル統合）→ R2（サブドメイン統合）→ R3（非同期化）→ R4（業務補完）
-                                          ↓
-                                   R5（ガバナンス）→ R6（可観測性強化）
-```
+### リファクタリングフェーズ（R1~R6）
 
 | フェーズ | テーマ | 期間 | コア目標 |
 |------|------|------|----------|
@@ -136,7 +182,7 @@ R1（カーネル統合）→ R2（サブドメイン統合）→ R3（非同期
 
 ---
 
-## 四、ドキュメントインデックス（docs/ 計 18 点、タイプ別に分類）
+## ドキュメントインデックス（docs/ 計 18 点、タイプ別に分類）
 
 | カテゴリ | ドキュメント | 用途 |
 |------|------|------|
@@ -158,48 +204,22 @@ R1（カーネル統合）→ R2（サブドメイン統合）→ R3（非同期
 | ガイド | 指南/数据流转验证指南.md | 4 層検証戦略 + .http フロースクリプト |
 | ガイド | 指南/M4业务补全与M6可观测性-开发记录.md | M4 分割/結合/アフターセールス + M6 可観測性実装ログ |
 | ガイド | 指南/0806-执行计划.md | メインライン開発手順 + 受入基準（コードの実状態から） |
-| スクリプト | sql/*.sql | 13 個の DDL スクリプト（docs/sql/、順に実行、第 5 章参照） |
+| スクリプト | sql/*.sql | 13 個の DDL スクリプト（docs/sql/、順に実行、クイックスタート参照） |
 | 検証 | api-test/审单链路验证.http | IDEA HTTP Client フロー検証スクリプト（docs/api-test/、注文→審査→請求→履行） |
 
 ---
 
-## 五、ローカル起動と結合検証
+## コントリビューションガイド
 
-```bash
-# 1. DB・テーブル作成（13 個の SQL スクリプトを順に実行）
-for f in docs/sql/*.sql; do mysql -uroot -p < "$f"; done
-
-# 2. 各サービスの application.yml の DB アカウント/パスワードを変更
-
-# 3. 起動（下流サービス優先；order-service は最後）
-mvn -pl tribunal-order-auth-service spring-boot:run        # 8087
-mvn -pl tribunal-order-customer-service spring-boot:run    # 8081
-mvn -pl tribunal-order-inventory-service spring-boot:run   # 8083
-mvn -pl tribunal-order-marketing-service spring-boot:run   # 8084
-mvn -pl tribunal-order-billing-service spring-boot:run     # 8082
-mvn -pl tribunal-order-fulfillment-service spring-boot:run # 8085
-mvn -pl tribunal-order-notification-service spring-boot:run# 8086
-mvn -pl tribunal-order-task-service spring-boot:run        # 8088
-mvn -pl tribunal-order-service spring-boot:run             # 8080（最後、オーケストレーションセンター）
-
-# 4. 結合検証（推奨ケース）
-# ① ログインしてトークン取得：POST /api/auth/login
-# ② 物料入庫：POST /api/inventory/items
-# ③ 価格設定：POST /api/marketing/price
-# ④ 注文登録：POST /api/orders（状態=確認待ち）
-# ⑤ 審査：POST /api/orders/{id}/review（5-in-1 オーケストレーション発動）
-# ⑥ 請求書決済：POST /api/bills/{id}/settle（注文ステートマシンへコールバック）
-# ⑦ 履行出荷/受領：POST /api/fulfillments/{id}/ship、/sign
-# 完全なスクリプトは docs/api-test/审单链路验证.http
-```
+1. **地図に従う**：すべての要件番号（F-/N-/Q-）は「要件番号とコード実装マッピング表」でコード位置と実装状態を確認できる
+2. **レイヤリング制約を守る**：domain 層は Spring/MyBatis クラスを一切 import しない（`interfaces → application → domain ← infrastructure`）
+3. **サービス境界では DTO を使う**：Feign は common の DTO を返す。ドメインクラスをサービス間で渡さない
+4. **テストを書く**：ステートマシン/金額計算にはユニットテスト必須（合法/不正/重複遷移）。現状の 46 ケースが下限
+5. **検証は .http スクリプトで**：「データフロー検証ガイド」に従い IDEA HTTP Client で各ロールを演じ、手動の Postman 操作を避ける
+6. Conventional Commits に従う（`feat`/`fix`/`docs`/`refactor`/`test`/`build`/`ci`）
 
 ---
 
-## 六、開発者向けヒント
+## License
 
-1. **地図に従う**：すべての要件番号（F-/N-/Q-）は「要件番号とコード実装マッピング表」でコード位置と実装状態を確認できる
-2. **domain 層に Spring を import しない**：Order/OrderStatus/FinanceBill は純 Java クラス。`@Service`/Mapper が出てきたらレイヤリングが壊れている
-3. **サービス境界では DTO を使い、ドメインオブジェクトを使わない**：Feign は common の DTO を返す。ドメインクラスをサービス間で渡さない
-4. **ステートマシンは核の中の核**：注文/請求書ステートマシン = 「ステートマシン + ユニークキー」の 2 層冪等。`OrderStatus` の理解に最も時間をかける
-5. **機能を 1 つ書いたらテストを 1 つ実行**：ステートマシン/金額計算にユニットテスト（合法/不正/重複遷移）を書く。現状の 46 ケースが下限
-6. **検証は .http スクリプトで**：「データフロー検証ガイド」に従い IDEA HTTP Client で各ロールを演じ、手動の Postman 操作を避ける
+[MIT](LICENSE) © 2026 Demetrius2107
