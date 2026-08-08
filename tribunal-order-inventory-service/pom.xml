@@ -16,9 +16,14 @@
     <description>库存物料模块（物料主数据 + 库存账 + 预占/释放 + 向上游推送）</description>
 
     <dependencies>
+        <!-- R1 共享内核：core（响应/异常/DTO）+ starter（鉴权/MybatisPlus 自动装配） -->
         <dependency>
             <groupId>com.demetrius</groupId>
-            <artifactId>tribunal-order-common</artifactId>
+            <artifactId>tribunal-common-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.demetrius</groupId>
+            <artifactId>tribunal-common-starter</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

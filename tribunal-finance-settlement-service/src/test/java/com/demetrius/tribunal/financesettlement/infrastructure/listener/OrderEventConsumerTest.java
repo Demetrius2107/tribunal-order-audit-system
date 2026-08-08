@@ -2,7 +2,7 @@ package com.demetrius.tribunal.financesettlement.infrastructure.listener;
 
 import com.demetrius.tribunal.financesettlement.application.dto.OrderEventMessage;
 import com.demetrius.tribunal.financesettlement.application.service.SettlementApplicationService;
-import com.demetrius.tribunal.financesettlement.common.dto.SettlementView;
+import com.demetrius.tribunal.common.dto.finance.SettlementView;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

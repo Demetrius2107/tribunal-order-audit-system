@@ -1,46 +1,39 @@
 package com.demetrius.tribunal.billing.infrastructure.listener;
 
-import com.demetrius.tribunal.billing.client.OrderStatusCallbackRequest;
-import com.demetrius.tribunal.billing.client.OrderStatusFeignClient;
 import com.demetrius.tribunal.billing.domain.event.BillStatusChangedEvent;
+import com.demetrius.tribunal.billing.infrastructure.event.BillingEventPublisher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * 金融账单状态变更事件监听器：回传 订单服务 驱动订单状态机。
+ * 金融账单状态变更事件监听器（M3 异步化：发布到 Kafka billing-events 主题）。
  *
- * <p>对应需求：F-503（状态回传）、N-304（回传幂等，订单服务 状态机兜底）。</p>
+ * <p>billing-service 内部状态变更 → Spring 进程内事件 → 本监听 → Kafka 发布。
+ * order-service 的 BillingEventConsumer 接收后驱动订单状态机。</p>
  *
- * <p>说明：</p>
- * <ul>
- *   <li>用 Spring 事件（进程内）触发 Feign 回传；升级 MQ 后替换为消息消费者</li>
- *   <li>TODO：回传失败重试（记录待重传表 + 定时补偿，对应 F-701 对账）</li>
- * </ul>
+ * <p>对应需求：F-503（状态回传）、N-304（回传幂等）。</p>
  */
 @Component
 public class BillStatusCallbackListener {
 
     private static final Logger log = LoggerFactory.getLogger(BillStatusCallbackListener.class);
 
-    private final OrderStatusFeignClient orderStatusFeignClient;
+    private final BillingEventPublisher billingEventPublisher;
 
-    public BillStatusCallbackListener(OrderStatusFeignClient orderStatusFeignClient) {
-        this.orderStatusFeignClient = orderStatusFeignClient;
+    public BillStatusCallbackListener(BillingEventPublisher billingEventPublisher) {
+        this.billingEventPublisher = billingEventPublisher;
     }
 
     @EventListener
     public void onStatusChanged(BillStatusChangedEvent event) {
         try {
-            orderStatusFeignClient.statusCallback(new OrderStatusCallbackRequest(
-                    event.sourceOrderNo(),
-                    event.to().name(),
-                    event.billId().value()));
-            log.info("已回传订单服务: sourceOrderNo={}, billStatus={}", event.sourceOrderNo(), event.to());
+            billingEventPublisher.publishBillStatusChanged(event);
+            log.info("已发布账单状态事件到 Kafka: sourceOrderNo={}, billStatus={}",
+                    event.sourceOrderNo(), event.to());
         } catch (Exception e) {
-            // TODO（学习任务）：记录回传失败，定时补偿（对应 F-701）
-            log.error("回传订单服务失败: sourceOrderNo={}, billStatus={}, error={}",
+            log.error("发布账单状态事件失败: sourceOrderNo={}, billStatus={}, error={}",
                     event.sourceOrderNo(), event.to(), e.getMessage());
         }
     }

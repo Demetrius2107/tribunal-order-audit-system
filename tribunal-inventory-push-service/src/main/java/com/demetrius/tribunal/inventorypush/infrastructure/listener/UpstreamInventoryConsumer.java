@@ -1,7 +1,7 @@
 package com.demetrius.tribunal.inventorypush.infrastructure.listener;
 
 import com.demetrius.tribunal.inventorypush.application.service.InventoryReceiveApplicationService;
-import com.demetrius.tribunal.inventorypush.common.dto.InventoryReceiveRequest;
+import com.demetrius.tribunal.common.dto.inventory.InventoryReceiveRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

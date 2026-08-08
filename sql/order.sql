@@ -89,3 +89,25 @@ CREATE TABLE t_order_returnable (
     PRIMARY KEY (id),
     KEY idx_order (order_id)
 ) ENGINE = InnoDB COMMENT = '空包装回收明细表';
+
+-- ------------------------------------------------------------
+-- 5. 本地消息表（Transactional Outbox Pattern / M3 异步化）
+--    业务操作与消息发布原子化，relay 定时轮询投递 Kafka
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_outbox_message;
+CREATE TABLE t_outbox_message (
+    id              BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
+    message_id      VARCHAR(64)  NOT NULL COMMENT '消息唯一ID（幂等键）',
+    topic           VARCHAR(128) NOT NULL COMMENT 'Kafka topic',
+    message_key     VARCHAR(128) NOT NULL COMMENT 'Kafka partition key（orderId，保证同订单事件顺序消费）',
+    payload         TEXT         NOT NULL COMMENT 'JSON 载荷',
+    status          VARCHAR(16)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING 待发 / SENT 已发 / FAILED 终态失败',
+    retry_count     INT          NOT NULL DEFAULT 0 COMMENT '已重试次数',
+    create_time     DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    sent_time       DATETIME     NULL COMMENT '投递成功时间',
+    next_retry_time DATETIME     NULL COMMENT '下次重试时间（指数退避）',
+    version         INT          NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_message_id (message_id),
+    KEY idx_status_retry (status, next_retry_time)
+) ENGINE = InnoDB COMMENT = '本地消息表（事务性发件箱）';

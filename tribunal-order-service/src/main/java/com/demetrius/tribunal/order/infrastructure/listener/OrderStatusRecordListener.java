@@ -17,10 +17,9 @@ import java.time.LocalDateTime;
  *
  * <p>说明：</p>
  * <ul>
- *   <li>用 Spring 事件（进程内）实现，后续升级 RabbitMQ 时替换为消息消费者即可</li>
- *   <li>REQUIRES_NEW：即使主事务回滚，流水也已落库（审计不随业务回滚）
- *       ——这是一个设计取舍，可讨论</li>
- *   <li>TODO：operator 目前来自事件内容，后续可从登录态透传（参照通用做法</li>
+ *   <li>用 Spring 事件（进程内）实现，异步状态变更（如 billing 回传）由 Kafka 消费者触发同一事件链</li>
+ *   <li>REQUIRES_NEW：即使主事务回滚，流水也已落库（审计不随业务回滚）</li>
+ *   <li>operator 来自事件内容：同步操作（审单/发货）透传操作员，异步操作（账单回传）默认 "system"</li>
  * </ul>
  */
 @Component

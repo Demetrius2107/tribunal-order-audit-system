@@ -1,7 +1,7 @@
 package com.demetrius.tribunal.financesettlement.application.service;
 
-import com.demetrius.tribunal.financesettlement.common.dto.ChargeRequest;
-import com.demetrius.tribunal.financesettlement.common.dto.SettlementView;
+import com.demetrius.tribunal.common.dto.finance.ChargeRequest;
+import com.demetrius.tribunal.common.dto.finance.SettlementView;
 import com.demetrius.tribunal.financesettlement.domain.model.PaymentIdempotent;
 import com.demetrius.tribunal.financesettlement.domain.model.SettlementOrder;
 import com.demetrius.tribunal.financesettlement.domain.repository.AccountBalanceRepository;
@@ -129,7 +129,7 @@ class SettlementApplicationServiceTest {
         try {
             service.charge(request);
         } catch (Exception e) {
-            assertEquals("FIN-002", ((com.demetrius.tribunal.financesettlement.common.exception.BizException) e).getCode());
+            assertEquals("FIN-002", ((com.demetrius.tribunal.common.exception.BizException) e).getCode());
             return;
         }
         throw new AssertionError("预期抛 FIN-002 幂等重复异常");

@@ -5,12 +5,7 @@ import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.application.dto.OrderReviewCommand;
 import com.demetrius.tribunal.order.application.dto.OrderResult;
-import com.demetrius.tribunal.order.client.BillTransferRequest;
-import com.demetrius.tribunal.order.client.BillTransferResult;
-import com.demetrius.tribunal.order.client.BillingFeignClient;
 import com.demetrius.tribunal.order.client.CustomerFeignClient;
-import com.demetrius.tribunal.order.client.FulfillmentFeignClient;
-import com.demetrius.tribunal.order.client.FulfillmentResult;
 import com.demetrius.tribunal.order.client.InventoryFeignClient;
 import com.demetrius.tribunal.order.client.InventoryItemResult;
 import com.demetrius.tribunal.order.client.MarketingFeignClient;
@@ -41,22 +36,15 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 审单应用服务。
+ * 审单应用服务（M3 异步化）。
  *
- * <p>三合一编排：审单通过 → 预占库存（inventory-service）→ 生成账单（billing-service）→
- * 账单结算回传（billing → order，状态机驱动）。</p>
+ * <p>审单通过编排：① 取价（marketing，同步）→ ② 信用校验（customer，同步）→
+ * ③ 预占库存（inventory，同步）→ ④ 信用占用（customer，同步）→
+ * ⑤ 发通知（notification，同步，非关键）→ ⑥ 订单确认 + outbox 事件发布 →
+ * ⑦ billing/fulfillment/finance-settlement 异步消费 order-events。</p>
  *
- * <p>微服务说明：跨服务调用均走 Feign（信用/库存/账单），跨服务边界用 DTO，
- * 业务规则仍在 order 领域层。</p>
- *
- * <p>TODO（学习任务）：</p>
- * <ul>
- *   <li>审单前重新计价：促销/折扣/押金在审单时重算</li>
- *   <li>审单通过后：通过 customer-service 接口正式扣减信用（下单是预占，审单是确定）</li>
- *   <li>审单拒绝：记录原因、释放信用预占与库存预占</li>
- *   <li>状态流水：每次迁移写 order_status_record</li>
- *   <li>Feign 失败处理：超时/熔断（骨架未引入，进阶项）</li>
- * </ul>
+ * <p>同步 3 子域（customer/marketing/inventory）保证审单时数据一致性；
+ * billing/fulfillment 通过 outbox → Kafka 异步驱动，审单接口不再同步等待。</p>
  */
 @Service
 public class OrderReviewApplicationService {
@@ -70,10 +58,6 @@ public class OrderReviewApplicationService {
     private final MarketingFeignClient marketingFeignClient;
 
     private final InventoryFeignClient inventoryFeignClient;
-
-    private final BillingFeignClient billingFeignClient;
-
-    private final FulfillmentFeignClient fulfillmentFeignClient;
 
     private final NotificationFeignClient notificationFeignClient;
 
@@ -91,8 +75,6 @@ public class OrderReviewApplicationService {
                                          CustomerFeignClient customerFeignClient,
                                          MarketingFeignClient marketingFeignClient,
                                          InventoryFeignClient inventoryFeignClient,
-                                         BillingFeignClient billingFeignClient,
-                                         FulfillmentFeignClient fulfillmentFeignClient,
                                          NotificationFeignClient notificationFeignClient,
                                          OrderReviewDomainService reviewDomainService,
                                          OrderAmountCalculator amountCalculator,
@@ -103,8 +85,6 @@ public class OrderReviewApplicationService {
         this.customerFeignClient = customerFeignClient;
         this.marketingFeignClient = marketingFeignClient;
         this.inventoryFeignClient = inventoryFeignClient;
-        this.billingFeignClient = billingFeignClient;
-        this.fulfillmentFeignClient = fulfillmentFeignClient;
         this.notificationFeignClient = notificationFeignClient;
         this.reviewDomainService = reviewDomainService;
         this.amountCalculator = amountCalculator;
@@ -165,8 +145,8 @@ public class OrderReviewApplicationService {
         CustomerCreditDto credit = customerFeignClient.getCustomerCredit(order.getCustomerId());
         reviewDomainService.validateForReview(order, credit, operator);
 
-        // ③~⑥ 跨服务编排：预占库存 → 信用占用 → 生成账单 → 创建履约 → 发送通知
-        // 远程副作用不会随本地事务回滚，任一失败必须补偿已做的操作（F-403/F-503）
+        // ③~④ 同步编排：预占库存 → 信用占用（远程副作用须补偿）
+        // M3 异步化：账单生成/履约创建改为 outbox → Kafka 异步事件，不再同步等待
         List<String> reservedSkus = new ArrayList<>();
         boolean creditOccupied = false;
         try {
@@ -183,31 +163,6 @@ public class OrderReviewApplicationService {
                     new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
             checkFeignSuccess(creditResp, "信用占用失败");
             creditOccupied = true;
-
-            ApiResponse<BillTransferResult> billResponse = billingFeignClient.transfer(new BillTransferRequest(
-                    order.getOrderNo(),
-                    order.getCustomerId(),
-                    order.getSkus().stream()
-                            .map(s -> new BillTransferRequest.BillTransferLine(
-                                    s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
-                            .toList()));
-            checkFeignSuccess(billResponse, "账单生成失败");
-
-            ApiResponse<FulfillmentResult> fulfillmentResponse =
-                    fulfillmentFeignClient.create(new FulfillmentFeignClient.FulfillmentCreateRequest(
-                            order.getOrderNo(),
-                            order.getCustomerId(),
-                            order.getSkus().stream()
-                                    .map(s -> new FulfillmentFeignClient.FulfillmentCreateRequest.FulfillmentLineItem(
-                                            s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
-                                    .toList()));
-            checkFeignSuccess(fulfillmentResponse, "履约创建失败");
-
-            ApiResponse<Void> notificationResponse =
-                    notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
-                            "SITE_MESSAGE", order.getCustomerId(), "订单已确认",
-                            "您的订单 " + order.getOrderNo() + " 已通过审单"));
-            checkFeignSuccess(notificationResponse, "通知发送失败");
         } catch (BizException e) {
             // 补偿：回滚已预占的库存 + 已占用的信用
             compensateReserved(reservedSkus, order);
@@ -223,7 +178,18 @@ public class OrderReviewApplicationService {
             throw new BizException("200006", "审单跨服务编排失败: " + e.getMessage());
         }
 
-        // ⑦ 状态迁移（聚合内部校验，非法迁移抛异常）
+        // ⑤ 发送通知（非关键路径，失败不阻断审单、不触发补偿）
+        try {
+            ApiResponse<Void> notificationResponse =
+                    notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
+                            "SITE_MESSAGE", order.getCustomerId(), "订单已确认",
+                            "您的订单 " + order.getOrderNo() + " 已通过审单"));
+            checkFeignSuccess(notificationResponse, "通知发送失败");
+        } catch (Exception e) {
+            log.warn("通知发送失败，审单流程继续 orderId={}", order.getOrderNo(), e);
+        }
+
+        // ⑥ 状态迁移（聚合内部校验，非法迁移抛异常）
         OrderStatusChangedEvent event = new OrderStatusChangedEvent(
                 order.getId(), order.getOrderNo(), order.getStatus(), null, operator, null);
         order.confirm();
@@ -234,7 +200,8 @@ public class OrderReviewApplicationService {
                 event.orderId(), event.orderNo(), event.from(), order.getStatus(),
                 event.operator(), order.getUpdateTime()));
 
-        // ⑧ 发布订单确认事件到 Kafka（下游金融结算系统订阅生成结算单，对应 PRD 4.1）
+        // ⑦ 发布订单确认事件到 outbox（relay 投递 Kafka，下游 billing/fulfillment/finance-settlement
+        //   异步消费，M3 异步化：审单接口不再同步等待 billing/fulfillment）
         orderEventPublisher.publishOrderEvent(buildApprovedEvent(order));
     }
 

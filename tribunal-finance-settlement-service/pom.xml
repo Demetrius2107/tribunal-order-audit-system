@@ -16,10 +16,10 @@
     <description>金融结算系统（资金结算中枢：账单生成/扣款/分账/退款/结算/对账）</description>
 
     <dependencies>
-        <!-- 使用本系统独立 common，不复用订单系统的 tribunal-order-common -->
+        <!-- R1 共享内核：core（响应/异常/金融结算 DTO）。独立系统不接鉴权，仅需 core -->
         <dependency>
             <groupId>com.demetrius</groupId>
-            <artifactId>tribunal-finance-settlement-common</artifactId>
+            <artifactId>tribunal-common-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

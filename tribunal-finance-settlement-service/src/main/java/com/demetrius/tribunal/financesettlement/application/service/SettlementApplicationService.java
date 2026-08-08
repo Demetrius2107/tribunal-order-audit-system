@@ -1,9 +1,9 @@
 package com.demetrius.tribunal.financesettlement.application.service;
 
-import com.demetrius.tribunal.financesettlement.common.dto.ChargeRequest;
-import com.demetrius.tribunal.financesettlement.common.dto.SettlementView;
-import com.demetrius.tribunal.financesettlement.common.dto.SplitRequest;
-import com.demetrius.tribunal.financesettlement.common.exception.BizException;
+import com.demetrius.tribunal.common.dto.finance.ChargeRequest;
+import com.demetrius.tribunal.common.dto.finance.SettlementView;
+import com.demetrius.tribunal.common.dto.finance.SplitRequest;
+import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.financesettlement.domain.model.AccountBalance;
 import com.demetrius.tribunal.financesettlement.domain.model.AccountTransaction;
 import com.demetrius.tribunal.financesettlement.domain.model.PaymentIdempotent;

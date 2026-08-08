@@ -1,10 +1,10 @@
 package com.demetrius.tribunal.financesettlement.interfaces.facade;
 
 import com.demetrius.tribunal.financesettlement.application.service.SettlementApplicationService;
-import com.demetrius.tribunal.financesettlement.common.dto.ChargeRequest;
-import com.demetrius.tribunal.financesettlement.common.dto.SettlementView;
-import com.demetrius.tribunal.financesettlement.common.dto.SplitRequest;
-import com.demetrius.tribunal.financesettlement.common.response.ApiResponse;
+import com.demetrius.tribunal.common.dto.finance.ChargeRequest;
+import com.demetrius.tribunal.common.dto.finance.SettlementView;
+import com.demetrius.tribunal.common.dto.finance.SplitRequest;
+import com.demetrius.tribunal.common.response.ApiResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
