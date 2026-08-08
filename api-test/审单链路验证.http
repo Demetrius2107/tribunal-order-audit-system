@@ -52,7 +52,7 @@ Content-Type: application/json
 
 ### 4. 查询客户信用额度（审单前基线）
 # 期望返回：creditLimit=100000, creditUsed=0（如果是全新环境）
-# 客户 cust-001 通过 sql/customer.sql 初始化
+# 客户 cust-001 通过 docs/sql/customer.sql 初始化
 GET http://localhost:8081/api/customers/cust-001/credit
 
 > {%

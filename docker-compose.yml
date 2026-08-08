@@ -19,7 +19,7 @@ version: '3.8'
 
 services:
   # ---------------------------------------------------------------------------
-  # MySQL 8.0 — 初始化脚本自动执行 sql/*.sql
+  # MySQL 8.0 — 初始化脚本自动执行 docs/sql/*.sql
   # ---------------------------------------------------------------------------
   mysql:
     image: mysql:8.0
@@ -33,7 +33,7 @@ services:
       - "3306:3306"
     volumes:
       - tribunal-mysql-data:/var/lib/mysql
-      - ./sql:/docker-entrypoint-initdb.d
+      - ./docs/sql:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
       interval: 10s

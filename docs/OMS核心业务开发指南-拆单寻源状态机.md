@@ -1117,8 +1117,8 @@ public class OrderMergeService {
 | `OrderReviewApplicationService.java` | 修改 | 重构 approve 方法 |
 | `OrderApplicationService.java` | 修改 | 新增状态回传处理 |
 | `InventoryFeignClient.java` | 修改 | 新增 getAvailableWarehouses |
-| `sql/order.sql` | 修改 | 新增字段 |
-| `sql/inventory.sql` | 修改 | 新建仓库库存表 |
+| `docs/sql/order.sql` | 修改 | 新增字段 |
+| `docs/sql/inventory.sql` | 修改 | 新建仓库库存表 |
 | 测试文件 | 新建 | 状态聚合/寻源/拆单/金额分摊 |
 
 ---

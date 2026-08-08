@@ -6,7 +6,7 @@ spring:
     name: tribunal-inventory-push-service
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 独立库：tribunal_inventory_push（库存推送系统独立数据库，对照 sql/inventory_push.sql）
+    # 独立库：tribunal_inventory_push（库存推送系统独立数据库，对照 docs/sql/inventory_push.sql）
     url: jdbc:mysql://localhost:3306/tribunal_inventory_push?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
