@@ -4,7 +4,7 @@
 > **Repository: https://github.com/Demetrius2107/tribunal-order-audit-system.git**
 >
 > 面向 B2B 渠道订货场景的订单管理与审单系统：经销商在线下单 → 销售按规则审单 → 生成金融账单完成财务处理 → 履约发货，状态全程回传。
-> 参照行业 19 系统全景，用 **DDD（领域驱动设计）+ 微服务形态** 从零搭建，单仓库多模块（3 大系统、14 个 Maven 模块）。
+> 参照行业 19 系统全景，用 **DDD（领域驱动设计）+ 微服务形态** 从零搭建，单仓库多模块（3 大系统 + 网关、15 个 Maven 模块，含共享内核）。
 
 ---
 
@@ -41,30 +41,34 @@
 
 ---
 
-## 二、当前架构（14 模块 / 3 大系统）
+## 二、当前架构（15 模块 / 3 大系统 + 网关）
 
 ```
 tribunal-order-audit-system（父工程，packaging=pom）
 │
-├── 【系统一】订单审单系统（9 业务模块 + 1 共享库）
-│   ├── tribunal-order-common/            # 共享库：ApiResponse / BizException / 跨服务 DTO
-│   ├── tribunal-order-auth-service/      # 认证授权：登录/注册/双 Token/RBAC   :8087
-│   ├── tribunal-order-customer-service/  # 客户信用：客户/信用额度/占用释放   :8081
-│   ├── tribunal-order-service/           # 订单审单：下单/状态机/五合一编排   :8080 ★编排中心
-│   ├── tribunal-order-inventory-service/ # 库存物料：主数据/预占释放          :8083
-│   ├── tribunal-order-marketing-service/ # 营销价格：价格/促销/折扣/押金      :8084
-│   ├── tribunal-order-billing-service/   # 金融账单：生成/审核/结算/核销/回传 :8082
+├── 【共享内核】tribunal-common-*（3 模块，R1 合并产物）
+│   ├── tribunal-common-core/     # 核心层：ApiResponse / BizException / 跨服务 DTO（纯 Java，零 Spring 依赖）
+│   ├── tribunal-common-starter/  # 起步依赖：JWT 鉴权自动装配 / MyBatis-Plus / Feign 内部 Token
+│   └── tribunal-common-event/    # 事件契约层：跨系统领域事件（Kafka 消息体）权威定义
+│
+├── 【系统一】订单审单系统（9 业务模块）
+│   ├── tribunal-order-auth-service/       # 认证授权：登录/注册/双 Token/RBAC   :8087
+│   ├── tribunal-order-customer-service/   # 客户信用：客户/信用额度/占用释放   :8081
+│   ├── tribunal-order-service/            # 订单审单：下单/状态机/五合一编排   :8080 ★编排中心
+│   ├── tribunal-order-inventory-service/  # 库存物料：主数据/预占释放          :8083
+│   ├── tribunal-order-marketing-service/  # 营销价格：价格/促销/折扣/押金      :8084
+│   ├── tribunal-order-billing-service/    # 金融账单：生成/审核/结算/核销/回传 :8082
 │   ├── tribunal-order-fulfillment-service/# 履约执行：出库/发货/签收/发工厂   :8085
 │   ├── tribunal-order-notification-service# 通知：站内信/邮件/短信/微信       :8086
-│   └── tribunal-order-task-service/      # 定时任务：超时关单/对账/归档       :8088
+│   └── tribunal-order-task-service/       # 定时任务：超时关单/对账/归档       :8088
 │
-├── 【系统二】库存推送系统（上游数据集成网关，独立 common）
-│   ├── tribunal-inventory-push-common/
-│   └── tribunal-inventory-push-service/
+├── 【系统二】库存推送系统（上游数据集成网关）
+│   └── tribunal-inventory-push-service/   # 库存推送：主数据/库存推送上游
 │
-└── 【系统三】金融结算系统（下游资金结算中枢，独立 common）
-    ├── tribunal-finance-settlement-common/
-    └── tribunal-finance-settlement-service/
+├── 【系统三】金融结算系统（下游资金结算中枢）
+│   └── tribunal-finance-settlement-service/  # 金融结算：账单结算/核销/资金流
+│
+└── 【网关】tribunal-gateway/              # M5：统一入口/路由/Nacos 服务发现/JWT 前置鉴权
 ```
 
 - 技术栈：JDK 21 / Spring Boot 3.2.x / Spring Cloud 2023.0.x + OpenFeign / MyBatis-Plus 3.5.7 / MySQL 8.x（每服务独立库）
@@ -129,7 +133,7 @@ R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业
 
 ---
 
-## 四、文档索引（docs/ 共 16 份）
+## 四、文档索引（docs/ 共 18 份）
 
 | 分类 | 文档 | 用途 |
 |------|------|------|
@@ -138,7 +142,7 @@ R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业
 | 需求 | 订单业务全系统功能清单.md | 19 系统全景 + 功能清单 |
 | 需求 | 金融结算模块需求规格说明书.md | 金融结算模块需求 |
 | 需求 | 库存推送模块需求规格说明书.md | 库存推送模块需求 |
-| 架构 | 架构总览.md | 当前架构模块全景（14 模块/端口/库） |
+| 架构 | 架构总览.md | 当前架构模块全景（15 模块/端口/库） |
 | 架构 | 目标系统架构设计文档.md | 目标分层架构 + 4 系统模块划分 |
 | 架构 | 重构架构-模块分包方案.md | 31 模块 Maven 树 + 迁移映射 |
 | 架构 | 认证授权链路设计.md | JWT + RBAC 全链路 |
@@ -149,6 +153,9 @@ R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业
 | 指南 | 业务名词与业务处理解析.md | 业务术语字典 |
 | 指南 | OMS核心业务开发指南-拆单寻源状态机.md | 拆单/合单/寻源/状态机补全施工图纸 |
 | 指南 | 数据流转验证指南.md | 四层验证策略 + .http 链路脚本 |
+| 指南 | M4业务补全与M6可观测性-开发记录.md | M4 拆单/合单/售后退货 + M6 可观测性落地记录 |
+| 指南 | 0806-执行计划.md | 主线开发步骤 + 验收标准（从代码真实状态出发） |
+| 脚本 | docs/sql/*.sql | 13 份建库建表脚本（按序执行，见第五节） |
 | 验证 | api-test/审单链路验证.http | IDEA HTTP Client 链路验证脚本（下单→审单→账单→履约） |
 
 ---
@@ -156,8 +163,8 @@ R1（合并内核）→ R2（子域合并）→ R3（异步改造）→ R4（业
 ## 五、本地启动与联调
 
 ```bash
-# 1. 建库建表（9 份 SQL 按序执行）
-for f in sql/*.sql; do mysql -uroot -p < "$f"; done
+# 1. 建库建表（13 份 SQL 按序执行）
+for f in docs/sql/*.sql; do mysql -uroot -p < "$f"; done
 
 # 2. 修改各服务 application.yml 数据库账号密码
 
