@@ -143,6 +143,19 @@ auth:
   # 服务间 Feign 调用互信令牌（各服务须一致）
   internal-token: ${AUTH_INTERNAL_TOKEN:tribunal-internal-token-2026}
 
+# M6: Actuator 指标/健康检查（Prometheus 采集 + 健康探活）
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 logging:
   level:
     com.demetrius.tribunal.order: debug

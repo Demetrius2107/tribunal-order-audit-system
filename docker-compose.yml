@@ -113,7 +113,49 @@ services:
       timeout: 10s
       retries: 5
 
+  # ---------------------------------------------------------------------------
+  # Prometheus — 指标采集（M6 可观测性）
+  # ---------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: tribunal-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - tribunal-prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Grafana — 指标可视化看板（M6 可观测性）
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:latest
+    container_name: tribunal-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - tribunal-grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   tribunal-mysql-data:
   tribunal-redis-data:
   tribunal-kafka-data:
+  tribunal-prometheus-data:
+  tribunal-grafana-data:

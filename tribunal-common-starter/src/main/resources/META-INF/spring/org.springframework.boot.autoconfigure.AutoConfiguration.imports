@@ -2,3 +2,5 @@ com.demetrius.tribunal.common.auth.AuthAutoConfiguration
 com.demetrius.tribunal.common.autoconfigure.MybatisPlusAutoConfiguration
 com.demetrius.tribunal.common.autoconfigure.KafkaErrorHandlingAutoConfiguration
 com.demetrius.tribunal.common.redis.RedisAutoConfiguration
+com.demetrius.tribunal.common.trace.TraceIdAutoConfiguration
+com.demetrius.tribunal.common.trace.TraceIdFeignAutoConfiguration

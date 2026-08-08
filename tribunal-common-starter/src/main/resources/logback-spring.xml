@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    全局结构化日志配置。
+
+    特性：
+    1. JSON 格式输出（logstash-encoder），便于 ELK/Loki 采集
+    2. 自动输出 traceId 字段（由 TraceIdFilter 注入 MDC）
+    3. 按服务名分文件：logs/${spring.application.name}.log
+    4. 开发环境（dev profile）使用人类可读的控制台格式
+
+    说明：此文件放在 common-starter 的 resources 下，各服务引入 starter 即继承。
+    如需覆盖，在服务模块的 src/main/resources/ 下放置同名文件。
+-->
+<configuration>
+
+    <springProperty scope="context" name="appName" source="spring.application.name"
+                    defaultValue="tribunal-app"/>
+
+    <!-- ===== 控制台：人类可读（开发环境友好） ===== -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level) [%X{traceId:-}] %cyan(%logger{40}) - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ===== JSON 文件（生产环境，供 ELK/Loki 采集） ===== -->
+    <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>logs/${appName}.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>logs/${appName}.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>5GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <includeContext>false</includeContext>
+            <includeMdc>true</includeMdc>
+            <customFields>{"app":"${appName}"}</customFields>
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <message>msg</message>
+                <thread>thread</thread>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+        </encoder>
+    </appender>
+
+    <!-- 开发环境：控制台即可 -->
+    <springProfile name="dev,default">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.demetrius.tribunal" level="DEBUG"/>
+    </springProfile>
+
+    <!-- 生产环境：控制台 + JSON 文件 -->
+    <springProfile name="prod">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="JSON_FILE"/>
+        </root>
+        <logger name="com.demetrius.tribunal" level="INFO"/>
+    </springProfile>
+
+</configuration>

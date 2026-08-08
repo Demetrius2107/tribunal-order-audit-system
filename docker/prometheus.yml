@@ -1,0 +1,41 @@
+# =============================================================================
+# Prometheus 采集配置（M6 可观测性）
+#
+# 采集目标：各微服务的 /actuator/prometheus 端点
+# 注意：微服务在宿主机启动（非 Docker 内），故用 host.docker.internal 连接
+#       Linux 环境需在 prometheus 容器中添加 --add-host=host.docker.internal:host-gateway
+# =============================================================================
+
+global:
+  scrape_interval: 15s          # 默认采集间隔
+  evaluation_interval: 15s      # 规则评估间隔
+
+scrape_configs:
+  # 订单/审单服务
+  - job_name: 'tribunal-order-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:18080']
+        labels:
+          service: 'order-service'
+
+  # 促销/押金服务
+  - job_name: 'tribunal-marketing-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:18086']
+        labels:
+          service: 'marketing-service'
+
+  # 库存服务
+  - job_name: 'tribunal-inventory-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:18084']
+        labels:
+          service: 'inventory-service'
+
+  # Prometheus 自身指标
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
