@@ -51,12 +51,16 @@ public class CouponTemplate {
     private final LocalDateTime createTime;
     private LocalDateTime updateTime;
 
+    /** 乐观锁版本号（防并发超发） */
+    private final int version;
+
     private CouponTemplate(String id, String templateNo, String name, CouponType type,
                            BigDecimal threshold, BigDecimal deductionAmount, BigDecimal discountRate,
                            Integer totalQuota, int perUserLimit,
                            LocalDateTime validStartTime, LocalDateTime validEndTime,
                            boolean active, int issuedCount,
-                           LocalDateTime createTime, LocalDateTime updateTime) {
+                           LocalDateTime createTime, LocalDateTime updateTime,
+                           int version) {
         this.id = id;
         this.templateNo = templateNo;
         this.name = name;
@@ -72,6 +76,7 @@ public class CouponTemplate {
         this.issuedCount = issuedCount;
         this.createTime = createTime;
         this.updateTime = updateTime;
+        this.version = version;
     }
 
     /**
@@ -98,7 +103,7 @@ public class CouponTemplate {
                 threshold, deductionAmount, discountRate,
                 totalQuota, perUserLimit,
                 validStartTime, validEndTime,
-                true, 0, now, now);
+                true, 0, now, now, 0);
     }
 
     /**
@@ -109,12 +114,13 @@ public class CouponTemplate {
                                          Integer totalQuota, int perUserLimit,
                                          LocalDateTime validStartTime, LocalDateTime validEndTime,
                                          boolean active, int issuedCount,
-                                         LocalDateTime createTime, LocalDateTime updateTime) {
+                                         LocalDateTime createTime, LocalDateTime updateTime,
+                                         int version) {
         return new CouponTemplate(id, templateNo, name, type,
                 threshold, deductionAmount, discountRate,
                 totalQuota, perUserLimit,
                 validStartTime, validEndTime,
-                active, issuedCount, createTime, updateTime);
+                active, issuedCount, createTime, updateTime, version);
     }
 
     private static void validateFields(CouponType type, BigDecimal threshold,
@@ -200,6 +206,7 @@ public class CouponTemplate {
     public LocalDateTime getValidEndTime() { return validEndTime; }
     public boolean isActive() { return active; }
     public int getIssuedCount() { return issuedCount; }
+    public int getVersion() { return version; }
     public LocalDateTime getCreateTime() { return createTime; }
     public LocalDateTime getUpdateTime() { return updateTime; }
 }

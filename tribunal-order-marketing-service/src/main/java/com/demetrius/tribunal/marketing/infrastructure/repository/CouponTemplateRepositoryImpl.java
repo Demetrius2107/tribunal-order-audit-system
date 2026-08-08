@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.marketing.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.marketing.domain.model.CouponTemplate;
 import com.demetrius.tribunal.marketing.domain.model.CouponType;
 import com.demetrius.tribunal.marketing.domain.repository.CouponTemplateRepository;
@@ -30,13 +31,25 @@ public class CouponTemplateRepositoryImpl implements CouponTemplateRepository {
         if (existing == null) {
             mapper.insert(po);
         } else {
-            mapper.updateById(po);
+            // 乐观锁：version 不匹配时影响行数为 0（并发超发/并发修改冲突）
+            if (mapper.updateById(po) == 0) {
+                throw new BizException("409201", "券模板已被并发修改，请重试");
+            }
         }
     }
 
     @Override
     public Optional<CouponTemplate> findById(String id) {
         CouponTemplatePo po = mapper.selectById(id);
+        return po == null ? Optional.empty() : Optional.of(toDomain(po));
+    }
+
+    @Override
+    public Optional<CouponTemplate> findByIdForUpdate(String id) {
+        CouponTemplatePo po = mapper.selectOne(
+                new LambdaQueryWrapper<CouponTemplatePo>()
+                        .eq(CouponTemplatePo::getId, id)
+                        .last("FOR UPDATE"));
         return po == null ? Optional.empty() : Optional.of(toDomain(po));
     }
 
@@ -68,7 +81,8 @@ public class CouponTemplateRepositoryImpl implements CouponTemplateRepository {
                 po.getValidStartTime(), po.getValidEndTime(),
                 Boolean.TRUE.equals(po.getActive()),
                 po.getIssuedCount() == null ? 0 : po.getIssuedCount(),
-                po.getCreateTime(), po.getUpdateTime());
+                po.getCreateTime(), po.getUpdateTime(),
+                po.getVersion() == null ? 0 : po.getVersion());
     }
 
     private CouponTemplatePo toPo(CouponTemplate t) {
@@ -88,6 +102,7 @@ public class CouponTemplateRepositoryImpl implements CouponTemplateRepository {
         po.setActive(t.isActive());
         po.setCreateTime(t.getCreateTime());
         po.setUpdateTime(t.getUpdateTime());
+        po.setVersion(t.getVersion());
         return po;
     }
 }

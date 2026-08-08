@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.marketing.infrastructure.repository;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.marketing.domain.model.CouponType;
 import com.demetrius.tribunal.marketing.domain.model.UserCoupon;
 import com.demetrius.tribunal.marketing.domain.model.UserCouponStatus;
@@ -32,7 +33,10 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
         if (existing == null) {
             mapper.insert(po);
         } else {
-            mapper.updateById(po);
+            // 乐观锁：version 不匹配时影响行数为 0（并发重复核销/重复操作冲突）
+            if (mapper.updateById(po) == 0) {
+                throw new BizException("409202", "券已被并发操作，请重试");
+            }
         }
     }
 
@@ -100,7 +104,8 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
                 UserCouponStatus.valueOf(po.getStatus()),
                 po.getOrderId(),
                 po.getReceiveTime(), po.getValidStartTime(), po.getValidEndTime(),
-                po.getUsedTime());
+                po.getUsedTime(),
+                po.getVersion() == null ? 0 : po.getVersion());
     }
 
     private UserCouponPo toPo(UserCoupon c) {
@@ -120,6 +125,7 @@ public class UserCouponRepositoryImpl implements UserCouponRepository {
         po.setValidStartTime(c.getValidStartTime());
         po.setValidEndTime(c.getValidEndTime());
         po.setUsedTime(c.getUsedTime());
+        po.setVersion(c.getVersion());
         return po;
     }
 }

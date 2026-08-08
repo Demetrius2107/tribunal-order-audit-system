@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -41,6 +42,10 @@ public class CouponTemplatePo {
     private Boolean active;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
+
+    /** 乐观锁版本号（防并发超发） */
+    @Version
+    private Integer version;
 
     @TableLogic
     private Integer deleted;

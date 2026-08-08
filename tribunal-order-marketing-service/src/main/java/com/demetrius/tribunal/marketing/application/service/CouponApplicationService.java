@@ -102,7 +102,15 @@ public class CouponApplicationService {
     // ===== 用户券操作 =====
 
     /**
-     * 领券（含防刷校验）。
+     * 领券（含防刷校验 + 行锁串行化防超发）。
+     *
+     * <p>并发安全：对模板行加 {@code SELECT ... FOR UPDATE} 悲观锁，
+     * 同一模板的并发领券串行执行，杜绝「读-改-写」竞态导致的超发/超限；</p>
+     * <ul>
+     *   <li>防刷 1：模板有效期/启用状态</li>
+     *   <li>防刷 2：总发放量 totalQuota（防超发）</li>
+     *   <li>防刷 3：每人限领数量 perUserLimit（防强刷）</li>
+     * </ul>
      *
      * @param templateId 券模板 ID
      * @param customerId 领用人
@@ -110,7 +118,9 @@ public class CouponApplicationService {
      */
     @Transactional
     public UserCouponResult receive(String templateId, String customerId) {
-        CouponTemplate template = loadTemplateOrThrow(templateId);
+        // 行锁：串行化同一模板的并发发放，防超发
+        CouponTemplate template = templateRepository.findByIdForUpdate(templateId)
+                .orElseThrow(() -> new BizException("404201", "券模板不存在: " + templateId));
 
         // 防刷 1: 校验有效期
         if (!template.isValid(LocalDateTime.now())) {

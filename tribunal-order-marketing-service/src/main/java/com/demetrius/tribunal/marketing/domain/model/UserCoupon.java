@@ -41,12 +41,15 @@ public class UserCoupon {
     private final LocalDateTime validEndTime;
     private LocalDateTime usedTime;
 
+    /** 乐观锁版本号（防并发重复核销） */
+    private final int version;
+
     private UserCoupon(String id, String couponCode, String templateId, String templateNo,
                       String customerId, CouponType type,
                       BigDecimal threshold, BigDecimal deductionAmount, BigDecimal discountRate,
                       UserCouponStatus status, String orderId,
                       LocalDateTime receiveTime, LocalDateTime validStartTime, LocalDateTime validEndTime,
-                      LocalDateTime usedTime) {
+                      LocalDateTime usedTime, int version) {
         this.id = id;
         this.couponCode = couponCode;
         this.templateId = templateId;
@@ -62,6 +65,7 @@ public class UserCoupon {
         this.validStartTime = validStartTime;
         this.validEndTime = validEndTime;
         this.usedTime = usedTime;
+        this.version = version;
     }
 
     /**
@@ -84,7 +88,7 @@ public class UserCoupon {
                 customerId, template.getType(),
                 template.getThreshold(), template.getDeductionAmount(), template.getDiscountRate(),
                 UserCouponStatus.AVAILABLE, null,
-                now, template.getValidStartTime(), template.getValidEndTime(), null);
+                now, template.getValidStartTime(), template.getValidEndTime(), null, 0);
     }
 
     /**
@@ -95,10 +99,11 @@ public class UserCoupon {
                                      BigDecimal threshold, BigDecimal deductionAmount, BigDecimal discountRate,
                                      UserCouponStatus status, String orderId,
                                      LocalDateTime receiveTime, LocalDateTime validStartTime,
-                                     LocalDateTime validEndTime, LocalDateTime usedTime) {
+                                     LocalDateTime validEndTime, LocalDateTime usedTime,
+                                     int version) {
         return new UserCoupon(id, couponCode, templateId, templateNo,
                 customerId, type, threshold, deductionAmount, discountRate,
-                status, orderId, receiveTime, validStartTime, validEndTime, usedTime);
+                status, orderId, receiveTime, validStartTime, validEndTime, usedTime, version);
     }
 
     // ---------- 状态流转 ----------
@@ -192,4 +197,5 @@ public class UserCoupon {
     public LocalDateTime getValidStartTime() { return validStartTime; }
     public LocalDateTime getValidEndTime() { return validEndTime; }
     public LocalDateTime getUsedTime() { return usedTime; }
+    public int getVersion() { return version; }
 }
