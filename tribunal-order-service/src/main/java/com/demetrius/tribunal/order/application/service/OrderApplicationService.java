@@ -7,9 +7,11 @@ import com.demetrius.tribunal.order.client.CustomerFeignClient;
 import com.demetrius.tribunal.order.client.InventoryFeignClient;
 import com.demetrius.tribunal.order.client.InventoryItemResult;
 import com.demetrius.tribunal.order.domain.event.OrderCreatedEvent;
+import com.demetrius.tribunal.order.domain.event.OrderStatusChangedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
+import com.demetrius.tribunal.order.domain.model.OrderStatus;
 import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
@@ -204,6 +206,63 @@ public class OrderApplicationService {
 
         orderRepository.save(order);
         return OrderResult.from(order);
+    }
+
+    /**
+     * M4：子单状态回传——聚合父单状态（蓝图 §4.3）。
+     *
+     * <p>当某张子单发货/签收后，履约服务回调本方法。本方法：</p>
+     * <ol>
+     *   <li>根据子单的 parentOrderId 定位父单</li>
+     *   <li>加载全部子单，统计已发货（含已签收）/已签收数量</li>
+     *   <li>调用 {@link Order#aggregateChildStatus} 计算并迁移父单状态</li>
+     *   <li>状态变更时保存父单并发布事件</li>
+     * </ol>
+     *
+     * <p>幂等：重复回传同一子单状态时，聚合结果不变，{@code aggregateChildStatus} 返回 false，不重复迁移。</p>
+     *
+     * @param childOrderId 发生状态变更的子单 ID
+     */
+    @Transactional
+    public void handleChildStatusCallback(String childOrderId) {
+        Order child = orderRepository.findById(new OrderId(childOrderId))
+                .orElseThrow(() -> new BizException("200002", "子单不存在: " + childOrderId));
+        if (!child.isChildOrder()) {
+            // 非子单（普通单/父单），无需聚合
+            return;
+        }
+
+        Order parent = orderRepository.findById(new OrderId(child.getParentOrderId()))
+                .orElseThrow(() -> new BizException("200002", "父单不存在: " + child.getParentOrderId()));
+        List<Order> children = orderRepository.findByParentOrderId(parent.getId().value());
+        if (children.isEmpty()) {
+            return;
+        }
+
+        // 统计：已发货（含已签收）数 / 已签收数
+        int shippedCount = 0;
+        int signedCount = 0;
+        for (Order c : children) {
+            OrderStatus s = c.getStatus();
+            if (s == OrderStatus.SIGNED) {
+                signedCount++;
+                shippedCount++;
+            } else if (s == OrderStatus.SHIPPED) {
+                shippedCount++;
+            }
+        }
+
+        OrderStatus from = parent.getStatus();
+        boolean changed = parent.aggregateChildStatus(shippedCount, signedCount, children.size());
+        if (changed) {
+            orderRepository.save(parent);
+            eventPublisher.publishEvent(new OrderStatusChangedEvent(
+                    parent.getId(), parent.getOrderNo(), from, parent.getStatus(),
+                    "SYSTEM", parent.getUpdateTime()));
+            log.info("M4 父单状态聚合 orderNo={} {} → {} (shipped={}/{}, signed={}/{})",
+                    parent.getOrderNo(), from, parent.getStatus(),
+                    shippedCount, children.size(), signedCount, children.size());
+        }
     }
 
     /**

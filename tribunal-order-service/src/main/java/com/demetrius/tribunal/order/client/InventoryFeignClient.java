@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 /**
  * 库存物料服务（inventory-service）的 Feign 客户端。
@@ -45,4 +46,17 @@ public interface InventoryFeignClient {
     @PostMapping("/api/inventory/items/{skuCode}/release")
     ApiResponse<InventoryItemResult> release(@PathVariable("skuCode") String skuCode,
                                              @RequestParam("quantity") BigDecimal quantity);
+
+    /**
+     * M4：仓库级库存查询（寻源分仓用）。
+     *
+     * <p>GET /api/inventory/warehouses/stock?skuCodes=A,B,C</p>
+     *
+     * <p>返回各仓库对所查 SKU 的可用库存，供 {@code WarehouseRoutingService} 寻源匹配。</p>
+     *
+     * @param skuCodes 需查询的 SKU 编码集合（逗号分隔）
+     * @return 仓库库存列表
+     */
+    @GetMapping("/api/inventory/warehouses/stock")
+    ApiResponse<List<WarehouseStockResult>> getWarehouseStock(@RequestParam("skuCodes") String skuCodes);
 }
