@@ -1,0 +1,533 @@
+### ============================================================
+### 审单链路验证脚本 — IDEA HTTP Client 格式
+### 用法：在 IDEA 中打开此文件，逐个点击绿色三角执行
+### 前置条件：MySQL + Kafka 已启动，所有微服务已启动
+### ============================================================
+
+### ============================================================
+### 场景一：正常审单流程（下单 -> 审单通过 -> 验证各服务数据变化）
+### ============================================================
+
+### 0. 注册测试用户（如果已注册会返回业务错误，忽略即可）
+POST http://localhost:8087/api/auth/register?username=auditor&password=123456&roleCode=DEALER
+
+### 1. 登录获取 JWT Token
+# 期望返回：code=200, data.accessToken 不为空
+# 这一步的 token 会自动存到全局变量，后续请求自动带上
+POST http://localhost:8087/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "auditor",
+  "password": "123456"
+}
+
+> {%
+    client.global.set("token", response.body.data.accessToken);
+    client.log("Token: " + response.body.data.accessToken);
+%}
+
+### 2. 创建库存项（inventory-service）
+# 期望返回：code=200, data.skuCode=SKU-001, data.totalQuantity=1000
+POST http://localhost:8083/api/inventory/items
+Content-Type: application/json
+
+{
+  "skuCode": "SKU-001",
+  "skuName": "测试商品A",
+  "unit": "BOX",
+  "totalQuantity": 1000
+}
+
+### 3. 创建第二个库存项
+POST http://localhost:8083/api/inventory/items
+Content-Type: application/json
+
+{
+  "skuCode": "SKU-002",
+  "skuName": "测试商品B",
+  "unit": "BOX",
+  "totalQuantity": 500
+}
+
+### 4. 查询客户信用额度（审单前基线）
+# 期望返回：creditLimit=100000, creditUsed=0（如果是全新环境）
+# 客户 cust-001 通过 docs/sql/customer.sql 初始化
+GET http://localhost:8081/api/customers/cust-001/credit
+
+> {%
+    client.log("审单前 - 客户信用: " + JSON.stringify(response.body.data));
+%}
+
+### 5. 查询库存（审单前基线）
+# 期望返回：totalQuantity=1000, lockedQuantity=0
+GET http://localhost:8083/api/inventory/items/SKU-001
+
+> {%
+    client.log("审单前 - 库存: " + JSON.stringify(response.body.data));
+%}
+
+### 6. 下单（核心步骤）
+# 期望返回：code=200, data.orderNo 不为空, data.status=TO_BE_CONFIRMED
+# 下单时会同步调用 customer-service 占用信用
+POST http://localhost:8080/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerId": "cust-001",
+  "skus": [
+    {
+      "skuCode": "SKU-001",
+      "skuName": "测试商品A",
+      "quantity": 10,
+      "price": 100.00
+    },
+    {
+      "skuCode": "SKU-002",
+      "skuName": "测试商品B",
+      "quantity": 5,
+      "price": 200.00
+    }
+  ],
+  "shippingFee": 50.00
+}
+
+> {%
+    client.global.set("orderId", response.body.data.orderId || response.body.data.orderNo);
+    client.log("下单成功，订单号: " + client.global.get("orderId"));
+%}
+
+### 7. 查询订单详情
+# 期望返回：status=TO_BE_CONFIRMED, totalAmount=1550(10*100+5*200+50运费)
+GET http://localhost:8080/api/orders/{{orderId}}
+Authorization: Bearer {{token}}
+
+> {%
+    client.log("订单详情: " + JSON.stringify(response.body.data));
+%}
+
+### 8. 查询客户信用（下单后）
+# 期望返回：creditUsed > 0（信用已被占用）
+# 金额应为订单总额 = 10*100 + 5*200 + 50 = 1550
+GET http://localhost:8081/api/customers/cust-001/credit
+
+> {%
+    client.log("下单后 - 客户信用: " + JSON.stringify(response.body.data));
+    client.assert(response.body.data.creditUsed > 0, "信用应该已被占用");
+%}
+
+### 9. 审单通过（核心步骤 — 触发五合一编排）
+# 期望返回：code=200
+# 这一步会同步调用：customer(信用校验) -> inventory(预占) -> marketing(重新计价) -> billing(生成账单) -> fulfillment(创建履约)
+POST http://localhost:8080/api/orders/{{orderId}}/review
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId}}",
+  "approved": true,
+  "operator": "auditor"
+}
+
+> {%
+    client.log("审单通过");
+%}
+
+### 10. 查询订单（审单后）
+# 期望返回：status=CONFIRMED
+GET http://localhost:8080/api/orders/{{orderId}}
+Authorization: Bearer {{token}}
+
+> {%
+    client.log("审单后订单状态: " + response.body.data.status);
+    client.assert(response.body.data.status === "CONFIRMED", "订单状态应为 CONFIRMED");
+%}
+
+### 11. 查询库存（审单后）
+# 期望返回：lockedQuantity > 0（库存已被预占）
+GET http://localhost:8083/api/inventory/items/SKU-001
+
+> {%
+    client.log("审单后 - 库存: " + JSON.stringify(response.body.data));
+%}
+
+### 12. 查询客户信用（审单后）
+# 期望返回：creditUsed 仍 > 0（审单通过后信用占用不变）
+GET http://localhost:8081/api/customers/cust-001/credit
+
+> {%
+    client.log("审单后 - 客户信用: " + JSON.stringify(response.body.data));
+%}
+
+### 13. 手动创建账单（模拟审单时 billing 的结果）
+# 注意：审单时 order-service 会通过 Feign 调 billing-service 创建账单
+# 如果审单成功，这里可以直接查询账单。以下用于独立测试 billing-service
+POST http://localhost:8082/api/bills
+Content-Type: application/json
+
+{
+  "sourceOrderNo": "{{orderId}}",
+  "customerId": "cust-001",
+  "lines": [
+    {
+      "skuCode": "SKU-001",
+      "skuName": "测试商品A",
+      "quantity": 10,
+      "price": 100.00
+    },
+    {
+      "skuCode": "SKU-002",
+      "skuName": "测试商品B",
+      "quantity": 5,
+      "price": 200.00
+    }
+  ]
+}
+
+> {%
+    client.global.set("billId", response.body.data.billId || response.body.data.id);
+    client.log("账单ID: " + client.global.get("billId"));
+%}
+
+### 14. 查询账单
+GET http://localhost:8082/api/bills/{{billId}}
+
+> {%
+    client.log("账单详情: " + JSON.stringify(response.body.data));
+%}
+
+### 15. 手动创建履约单（模拟审单时 fulfillment 的结果）
+POST http://localhost:8085/api/fulfillments
+Content-Type: application/json
+
+{
+  "sourceOrderNo": "{{orderId}}",
+  "customerId": "cust-001",
+  "lines": [
+    {
+      "skuCode": "SKU-001",
+      "skuName": "测试商品A",
+      "quantity": 10,
+      "price": 100.00
+    }
+  ]
+}
+
+> {%
+    client.global.set("fulfillmentId", response.body.data.fulfillmentId || response.body.data.id);
+    client.log("履约单ID: " + client.global.get("fulfillmentId"));
+%}
+
+### 16. 查询履约单
+GET http://localhost:8085/api/fulfillments/{{fulfillmentId}}
+
+> {%
+    client.log("履约单详情: " + JSON.stringify(response.body.data));
+%}
+
+### 17. 履约发货
+# 期望返回：code=200, 履约单状态变为 SHIPPED
+POST http://localhost:8085/api/fulfillments/{{fulfillmentId}}/ship
+
+> {%
+    client.log("已发货");
+%}
+
+### 18. 履约签收
+# 期望返回：code=200, 履约单状态变为 SIGNED
+POST http://localhost:8085/api/fulfillments/{{fulfillmentId}}/sign
+
+> {%
+    client.log("已签收");
+%}
+
+### 19. 账单确认
+POST http://localhost:8082/api/bills/{{billId}}/confirm
+
+### 20. 账单结算
+POST http://localhost:8082/api/bills/{{billId}}/settle
+
+### 21. 账单核销
+POST http://localhost:8082/api/bills/{{billId}}/verify
+
+### 22. 账单状态回传订单
+# 模拟 billing-service 回传订单状态
+POST http://localhost:8080/api/orders/status-callback
+Content-Type: application/json
+
+{
+  "sourceOrderNo": "{{orderId}}",
+  "billStatus": "CLOSED",
+  "billId": "{{billId}}"
+}
+
+
+### ============================================================
+### 场景二：审单拒绝流程（下单 -> 审单拒绝 -> 验证信用释放）
+### ============================================================
+
+### 23. 下第二单
+POST http://localhost:8080/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerId": "cust-001",
+  "skus": [
+    {
+      "skuCode": "SKU-001",
+      "skuName": "测试商品A",
+      "quantity": 3,
+      "price": 100.00
+    }
+  ]
+}
+
+> {%
+    client.global.set("orderId2", response.body.data.orderId || response.body.data.orderNo);
+    client.log("第二单订单号: " + client.global.get("orderId2"));
+%}
+
+### 24. 审单拒绝
+# 期望返回：code=200
+# 审单拒绝会释放下单时占用的信用
+POST http://localhost:8080/api/orders/{{orderId2}}/review
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId2}}",
+  "approved": false,
+  "reason": "客户信用不足，拒绝审单",
+  "operator": "auditor"
+}
+
+> {%
+    client.log("审单拒绝");
+%}
+
+### 25. 查询订单（拒绝后）
+# 期望返回：status=REJECTED
+GET http://localhost:8080/api/orders/{{orderId2}}
+Authorization: Bearer {{token}}
+
+> {%
+    client.log("拒绝后订单状态: " + response.body.data.status);
+    client.assert(response.body.data.status === "REJECTED", "订单状态应为 REJECTED");
+%}
+
+### 26. 查询客户信用（拒绝后）
+# 期望返回：creditUsed 比下单后减少（信用已释放）
+GET http://localhost:8081/api/customers/cust-001/credit
+
+> {%
+    client.log("拒绝后 - 客户信用: " + JSON.stringify(response.body.data));
+%}
+
+
+### ============================================================
+### 场景三：取消订单流程（下单 -> 审单通过 -> 取消 -> 验证释放）
+### ============================================================
+
+### 27. 下第三单
+POST http://localhost:8080/api/orders
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "customerId": "cust-001",
+  "skus": [
+    {
+      "skuCode": "SKU-002",
+      "skuName": "测试商品B",
+      "quantity": 2,
+      "price": 200.00
+    }
+  ]
+}
+
+> {%
+    client.global.set("orderId3", response.body.data.orderId || response.body.data.orderNo);
+    client.log("第三单订单号: " + client.global.get("orderId3"));
+%}
+
+### 28. 审单通过
+POST http://localhost:8080/api/orders/{{orderId3}}/review
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "orderId": "{{orderId3}}",
+  "approved": true,
+  "operator": "auditor"
+}
+
+### 29. 取消订单
+# 期望返回：code=200
+# 取消会释放信用额度和库存预占
+POST http://localhost:8080/api/orders/{{orderId3}}/cancel
+Authorization: Bearer {{token}}
+
+> {%
+    client.log("订单已取消");
+%}
+
+### 30. 查询订单（取消后）
+# 期望返回：status=CANCELLED
+GET http://localhost:8080/api/orders/{{orderId3}}
+Authorization: Bearer {{token}}
+
+> {%
+    client.log("取消后订单状态: " + response.body.data.status);
+    client.assert(response.body.data.status === "CANCELLED", "订单状态应为 CANCELLED");
+%}
+
+### 31. 查询库存（取消后）
+# 期望返回：lockedQuantity 减少（库存已释放）
+GET http://localhost:8083/api/inventory/items/SKU-002
+
+> {%
+    client.log("取消后 - 库存: " + JSON.stringify(response.body.data));
+%}
+
+
+### ============================================================
+### 场景四：库存推送流程（模拟上游系统推送库存数据）
+### ============================================================
+
+### 32. 推送上游库存（全量）
+# 模拟外部库存系统推送数据到 inventory-push-service
+# 期望返回：code=200, data 包含接收条数
+POST http://localhost:8090/api/v1/inventory/receive
+Content-Type: application/json
+
+{
+  "batchId": "INV_20260805_001",
+  "pushType": "FULL",
+  "timestamp": "2026-08-05T14:00:00+08:00",
+  "totalCount": 2,
+  "items": [
+    {
+      "sourceSkuId": "SKU-001",
+      "warehouseId": "WH-001",
+      "ownerId": "OWNER_SELF",
+      "inventory": {
+        "totalQty": 2000,
+        "availableQty": 1800,
+        "lockedQty": 200,
+        "inTransitQty": 100,
+        "reservedQty": 50
+      },
+      "version": 1,
+      "unit": "BOX",
+      "unitConversion": 1
+    },
+    {
+      "sourceSkuId": "SKU-002",
+      "warehouseId": "WH-001",
+      "ownerId": "OWNER_SELF",
+      "inventory": {
+        "totalQty": 800,
+        "availableQty": 750,
+        "lockedQty": 50,
+        "inTransitQty": 0,
+        "reservedQty": 0
+      },
+      "version": 1,
+      "unit": "BOX",
+      "unitConversion": 1
+    }
+  ]
+}
+
+> {%
+    client.log("库存推送结果: " + JSON.stringify(response.body.data));
+%}
+
+### 33. 查询推送后的库存
+GET http://localhost:8090/api/v1/inventory/query?skuId=SKU-001&warehouseId=WH-001
+
+> {%
+    client.log("推送后库存查询: " + JSON.stringify(response.body.data));
+%}
+
+
+### ============================================================
+### 场景五：金融结算流程（扣款 + 分账）
+### ============================================================
+
+### 34. 支付扣款（幂等）
+# 模拟结算系统发起扣款
+POST http://localhost:8091/api/v1/payment/charge
+Content-Type: application/json
+
+{
+  "settlementId": "SET-001",
+  "idempotencyKey": "SET-001_BATCH_1",
+  "amount": 1550.00,
+  "currency": "CNY",
+  "paymentMethod": "WECHAT_PAY",
+  "paymentToken": "mock_token_001",
+  "description": "订单 {{orderId}} 结算扣款",
+  "orderId": "{{orderId}}",
+  "userId": "cust-001"
+}
+
+> {%
+    client.log("扣款结果: " + JSON.stringify(response.body.data));
+%}
+
+### 35. 分账执行
+POST http://localhost:8091/api/v1/payment/split
+Content-Type: application/json
+
+{
+  "settlementId": "SET-001",
+  "totalAmount": 1550.00,
+  "splits": [
+    {
+      "recipientId": "MERCHANT-001",
+      "recipientType": "MERCHANT",
+      "amount": 1200.00,
+      "description": "商家货款"
+    },
+    {
+      "recipientId": "PLATFORM-001",
+      "recipientType": "PLATFORM",
+      "amount": 200.00,
+      "description": "平台佣金"
+    },
+    {
+      "recipientId": "LOGISTICS-001",
+      "recipientType": "LOGISTICS",
+      "amount": 150.00,
+      "description": "物流费用"
+    }
+  ]
+}
+
+> {%
+    client.log("分账结果: " + JSON.stringify(response.body.data));
+%}
+
+### 36. 重复扣款（验证幂等）
+# 期望返回：code=200，但不重复扣款（幂等返回）
+POST http://localhost:8091/api/v1/payment/charge
+Content-Type: application/json
+
+{
+  "settlementId": "SET-001",
+  "idempotencyKey": "SET-001_BATCH_1",
+  "amount": 1550.00,
+  "currency": "CNY",
+  "paymentMethod": "WECHAT_PAY",
+  "paymentToken": "mock_token_001",
+  "description": "订单 {{orderId}} 结算扣款（重复）",
+  "orderId": "{{orderId}}",
+  "userId": "cust-001"
+}
+
+> {%
+    client.log("重复扣款结果（应幂等返回）: " + JSON.stringify(response.body.data));
+%}
