@@ -79,6 +79,27 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- M5: Nacos 服务发现（optional，服务声明 spring.cloud.nacos.discovery.enabled 启用） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- M5: Resilience4j 熔断/降级（optional，消费方需引入 spring-cloud-starter-circuitbreaker-resilience4j） -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- M5: Redis 分布式幂等/登录锁定/RefreshToken（optional） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

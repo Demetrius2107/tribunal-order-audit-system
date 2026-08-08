@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.order.client;
 
 import com.demetrius.tribunal.common.dto.CustomerCreditDto;
+import com.demetrius.tribunal.order.client.fallback.CustomerFeignFallbackFactory;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +25,8 @@ import java.math.BigDecimal;
  * </ul>
  */
 @FeignClient(name = "tribunal-order-customer-service",
-        url = "${customer.service.url:http://localhost:8081}")
+        url = "${customer.service.url:http://localhost:8081}",
+        fallbackFactory = CustomerFeignFallbackFactory.class)
 public interface CustomerFeignClient {
 
     /**

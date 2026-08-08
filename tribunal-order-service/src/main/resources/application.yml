@@ -6,7 +6,6 @@ spring:
     name: tribunal-order-service
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    # 独立库：tribunal_order（微服务独立数据库，对照 schema.sql）
     url: jdbc:mysql://localhost:3306/tribunal_order?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: root
     password: root
@@ -20,12 +19,78 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+  # M5: Nacos 服务发现（无 Nacos 环境时设为 false，直连 url 模式仍可用）
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_ENABLED:false}
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        namespace: ${NACOS_NAMESPACE:public}
+  # M5: Redis（分布式幂等/登录锁定；无 Redis 时降级到本地 ConcurrentHashMap）
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 0
 
 # M3 异步化：本地消息表中继开关（测试/无 Kafka 环境可关闭）
 tribunal:
   outbox:
     relay:
       enabled: ${OUTBOX_RELAY_ENABLED:true}
+
+# M5: Resilience4j 熔断/降级配置
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - feign.FeignException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+    instances:
+      customer-service:
+        base-config: default
+      marketing-service:
+        base-config: default
+  # M5: 限流（防止下游被压垮）
+  ratelimiter:
+    configs:
+      default:
+        limit-for-period: 50
+        limit-refresh-period: 1s
+        timeout-duration: 5s
+    instances:
+      customer-service:
+        base-config: default
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+
+# M5: Feign + Resilience4j 整合（熔断器按 Feign client name 分组）
+feign:
+  circuitbreaker:
+    enabled: true
 
 # customer-service 地址（Feign 直连；接入 Nacos 后可去掉 url 用服务名路由）
 customer:
