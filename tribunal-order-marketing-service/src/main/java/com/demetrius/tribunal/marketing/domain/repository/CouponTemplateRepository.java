@@ -1,0 +1,28 @@
+package com.demetrius.tribunal.marketing.domain.repository;
+
+import com.demetrius.tribunal.marketing.domain.model.CouponTemplate;
+
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 券模板仓储接口。
+ */
+public interface CouponTemplateRepository {
+
+    void save(CouponTemplate template);
+
+    Optional<CouponTemplate> findById(String id);
+
+    /**
+     * 行锁查询（SELECT ... FOR UPDATE）。
+     *
+     * <p>领券时对模板行加锁，串行化同一模板的并发发放，防止超发。</p>
+     */
+    Optional<CouponTemplate> findByIdForUpdate(String id);
+
+    Optional<CouponTemplate> findByTemplateNo(String templateNo);
+
+    /** 查询所有启用的券模板（供用户浏览可领券列表） */
+    List<CouponTemplate> findAllActive();
+}
