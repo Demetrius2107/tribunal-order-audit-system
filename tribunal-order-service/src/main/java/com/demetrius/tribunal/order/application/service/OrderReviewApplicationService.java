@@ -11,14 +11,23 @@ import com.demetrius.tribunal.order.client.InventoryItemResult;
 import com.demetrius.tribunal.order.client.MarketingFeignClient;
 import com.demetrius.tribunal.order.client.NotificationFeignClient;
 import com.demetrius.tribunal.order.client.PriceQuoteResult;
+import com.demetrius.tribunal.order.client.WarehouseStockResult;
 import com.demetrius.tribunal.order.domain.event.OrderStatusChangedEvent;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
+import com.demetrius.tribunal.order.domain.model.OrderStatus;
+import com.demetrius.tribunal.order.domain.model.RoutingResult;
+import com.demetrius.tribunal.order.domain.model.SkuRequirement;
+import com.demetrius.tribunal.order.domain.model.SplitResult;
+import com.demetrius.tribunal.order.domain.model.WarehouseStock;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
+import com.demetrius.tribunal.order.domain.service.InsufficientStockException;
 import com.demetrius.tribunal.order.domain.service.OrderAmountCalculator;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
+import com.demetrius.tribunal.order.domain.service.OrderSplitService;
 import com.demetrius.tribunal.order.domain.service.PromotionCalculator;
+import com.demetrius.tribunal.order.domain.service.WarehouseRoutingService;
 import com.demetrius.tribunal.order.infrastructure.event.OrderEventPublisher;
 import com.demetrius.tribunal.order.application.dto.OrderEventMessage;
 import org.slf4j.Logger;
@@ -67,6 +76,10 @@ public class OrderReviewApplicationService {
 
     private final PromotionCalculator promotionCalculator;
 
+    private final WarehouseRoutingService warehouseRoutingService;
+
+    private final OrderSplitService orderSplitService;
+
     private final ApplicationEventPublisher eventPublisher;
 
     private final OrderEventPublisher orderEventPublisher;
@@ -79,6 +92,8 @@ public class OrderReviewApplicationService {
                                          OrderReviewDomainService reviewDomainService,
                                          OrderAmountCalculator amountCalculator,
                                          PromotionCalculator promotionCalculator,
+                                         WarehouseRoutingService warehouseRoutingService,
+                                         OrderSplitService orderSplitService,
                                          ApplicationEventPublisher eventPublisher,
                                          OrderEventPublisher orderEventPublisher) {
         this.orderRepository = orderRepository;
@@ -89,6 +104,8 @@ public class OrderReviewApplicationService {
         this.reviewDomainService = reviewDomainService;
         this.amountCalculator = amountCalculator;
         this.promotionCalculator = promotionCalculator;
+        this.warehouseRoutingService = warehouseRoutingService;
+        this.orderSplitService = orderSplitService;
         this.eventPublisher = eventPublisher;
         this.orderEventPublisher = orderEventPublisher;
     }
@@ -203,6 +220,77 @@ public class OrderReviewApplicationService {
         // ⑦ 发布订单确认事件到 outbox（relay 投递 Kafka，下游 billing/fulfillment/finance-settlement
         //   异步消费，M3 异步化：审单接口不再同步等待 billing/fulfillment）
         orderEventPublisher.publishOrderEvent(buildApprovedEvent(order));
+
+        // ⑧ M4 寻源分仓：审单确认后，按各仓库可用库存寻源；多仓命中则拆单
+        routeAndSplit(order, operator);
+    }
+
+    /**
+     * M4：寻源分仓编排（蓝图 §3.2/§3.3）。
+     *
+     * <p>流程：</p>
+     * <ol>
+     *   <li>构建 SKU 需求集合</li>
+     *   <li>查询各仓库可用库存（inventory-service）</li>
+     *   <li>调用 {@link WarehouseRoutingService} 寻源匹配</li>
+     *   <li>多仓 → {@link OrderSplitService} 拆单，父单 SPLITTED，子单落库</li>
+     *   <li>单仓 → 父单明细绑定仓库，保持 CONFIRMED 走正常履约</li>
+     * </ol>
+     *
+     * <p>缺货（某 SKU 所有仓库均不足）时，订单停留在 CONFIRMED 并记录告警，
+     * 交由人工或对账任务处理，不阻断审单主流程已完成的状态迁移。</p>
+     */
+    private void routeAndSplit(Order order, String operator) {
+        // 构建 SKU 需求
+        List<SkuRequirement> requirements = order.getSkus().stream()
+                .map(s -> new SkuRequirement(s.getSkuCode(), s.getQuantity()))
+                .toList();
+
+        // 查询仓库级可用库存
+        String skuCodes = String.join(",", order.getSkus().stream().map(OrderSku::getSkuCode).toList());
+        List<WarehouseStock> stocks;
+        try {
+            ApiResponse<List<WarehouseStockResult>> resp = inventoryFeignClient.getWarehouseStock(skuCodes);
+            checkFeignSuccess(resp, "仓库库存查询失败");
+            stocks = resp.getData().stream()
+                    .map(r -> new WarehouseStock(r.warehouseId(), r.skuCode(), r.availableQuantity()))
+                    .toList();
+        } catch (Exception e) {
+            log.warn("M4 寻源阶段库存查询失败，订单保持已确认状态 orderNo={}: {}", order.getOrderNo(), e.getMessage());
+            return;
+        }
+
+        // 寻源匹配
+        RoutingResult routingResult;
+        try {
+            routingResult = warehouseRoutingService.route(requirements, stocks);
+        } catch (InsufficientStockException e) {
+            log.warn("M4 寻源缺货，订单保持已确认状态等待处理 orderNo={} skuCode={}: {}",
+                    order.getOrderNo(), e.getSkuCode(), e.getMessage());
+            return;
+        }
+
+        if (routingResult.needsSplit()) {
+            // 多仓 → 拆单
+            SplitResult splitResult = orderSplitService.split(order, routingResult);
+            orderRepository.save(splitResult.parent());
+            for (Order child : splitResult.children()) {
+                orderRepository.save(child);
+            }
+            log.info("M4 拆单完成 orderNo={} → {} 张子单", order.getOrderNo(), splitResult.children().size());
+            // 父单状态变更事件（CONFIRMED → SPLITTING → SPLITTED）
+            eventPublisher.publishEvent(new OrderStatusChangedEvent(
+                    order.getId(), order.getOrderNo(), OrderStatus.CONFIRMED, order.getStatus(),
+                    operator, order.getUpdateTime()));
+        } else {
+            // 单仓 → 明细绑定仓库，保持 CONFIRMED 走正常履约链
+            String warehouseId = routingResult.assignments().keySet().iterator().next();
+            for (OrderSku sku : order.getSkus()) {
+                sku.assignWarehouse(warehouseId);
+            }
+            orderRepository.save(order);
+            log.info("M4 寻源命中单仓 orderNo={} warehouseId={}，无需拆单", order.getOrderNo(), warehouseId);
+        }
     }
 
     /**

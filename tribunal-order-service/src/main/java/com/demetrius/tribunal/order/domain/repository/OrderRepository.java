@@ -3,6 +3,7 @@ package com.demetrius.tribunal.order.domain.repository;
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -43,4 +44,9 @@ public interface OrderRepository {
      * 删除订单（物理删除 / 逻辑删除由实现决定，推荐逻辑删除）。
      */
     void delete(OrderId id);
+
+    /**
+     * M4：按父订单 ID 查询所有子单（拆单后状态聚合时使用）。
+     */
+    List<Order> findByParentOrderId(String parentOrderId);
 }

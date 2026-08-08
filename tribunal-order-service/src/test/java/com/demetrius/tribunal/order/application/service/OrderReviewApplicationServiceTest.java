@@ -15,7 +15,9 @@ import com.demetrius.tribunal.order.domain.model.OrderStatus;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.domain.service.OrderAmountCalculator;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
+import com.demetrius.tribunal.order.domain.service.OrderSplitService;
 import com.demetrius.tribunal.order.domain.service.PromotionCalculator;
+import com.demetrius.tribunal.order.domain.service.WarehouseRoutingService;
 import com.demetrius.tribunal.order.infrastructure.event.OrderEventPublisher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -64,6 +66,8 @@ class OrderReviewApplicationServiceTest {
     private final OrderAmountCalculator amountCalculator = new OrderAmountCalculator();
     private final OrderReviewDomainService reviewDomainService = new OrderReviewDomainService();
     private final PromotionCalculator promotionCalculator = new PromotionCalculator();
+    private final WarehouseRoutingService warehouseRoutingService = new WarehouseRoutingService();
+    private final OrderSplitService orderSplitService = new OrderSplitService();
 
     @BeforeEach
     void setUp() {
@@ -71,6 +75,7 @@ class OrderReviewApplicationServiceTest {
                 orderRepository, customerFeignClient, marketingFeignClient,
                 inventoryFeignClient, notificationFeignClient,
                 reviewDomainService, amountCalculator, promotionCalculator,
+                warehouseRoutingService, orderSplitService,
                 eventPublisher, orderEventPublisher);
     }
 

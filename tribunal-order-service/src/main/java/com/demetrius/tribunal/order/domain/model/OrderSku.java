@@ -26,6 +26,9 @@ public class OrderSku {
 
     private BigDecimal amount;
 
+    /** M4：寻源仓库 ID（拆单时由寻源服务绑定；未寻源时为 null） */
+    private String warehouseId;
+
     public OrderSku(String skuCode, String skuName, BigDecimal quantity, BigDecimal price) {
         if (skuCode == null || skuCode.isBlank()) {
             throw new IllegalArgumentException("SKU编码不能为空");
@@ -54,6 +57,27 @@ public class OrderSku {
         this.amount = quantity.multiply(newPrice);
     }
 
+    /**
+     * M4：绑定寻源仓库（拆单时由寻源服务调用）。
+     *
+     * @param warehouseId 仓库 ID
+     */
+    public void assignWarehouse(String warehouseId) {
+        if (warehouseId == null || warehouseId.isBlank()) {
+            throw new IllegalArgumentException("仓库ID不能为空: " + skuCode);
+        }
+        this.warehouseId = warehouseId;
+    }
+
+    /**
+     * M4：复制当前明细并绑定仓库（用于拆单时生成子单明细）。
+     */
+    public OrderSku withWarehouse(String warehouseId) {
+        OrderSku copy = new OrderSku(skuCode, skuName, quantity, price);
+        copy.assignWarehouse(warehouseId);
+        return copy;
+    }
+
     public String getSkuCode() {
         return skuCode;
     }
@@ -72,5 +96,10 @@ public class OrderSku {
 
     public BigDecimal getAmount() {
         return amount;
+    }
+
+    /** M4：寻源仓库 ID（未寻源时为 null） */
+    public String getWarehouseId() {
+        return warehouseId;
     }
 }

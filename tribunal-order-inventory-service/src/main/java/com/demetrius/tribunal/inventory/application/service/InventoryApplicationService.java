@@ -69,6 +69,17 @@ public class InventoryApplicationService {
     }
 
     /**
+     * 退货入库（售后退货完成时调用）。
+     */
+    @Transactional
+    public InventoryItem returnStock(String skuCode, java.math.BigDecimal quantity) {
+        InventoryItem item = getBySkuCode(skuCode);
+        item.returnStock(quantity);
+        inventoryItemRepository.save(item);
+        return item;
+    }
+
+    /**
      * 物料入库/库存更新（主数据维护入口，也可由外部同步）。
      */
     @Transactional

@@ -50,9 +50,29 @@ public enum OrderStatus {
     TRANSFERRED("已转单"),
 
     /**
+     * 拆单中（M4：审单通过后进入寻源分仓，确认是否需要拆单）
+     */
+    SPLITTING("拆单中"),
+
+    /**
+     * 已拆单（M4：按仓库拆出子单，父单进入此状态等待子单回传状态聚合）
+     */
+    SPLITTED("已拆单"),
+
+    /**
+     * 部分发货（M4：拆单父单状态聚合——部分子单已发货）
+     */
+    PARTIALLY_SHIPPED("部分发货"),
+
+    /**
      * 已发货
      */
     SHIPPED("已发货"),
+
+    /**
+     * 部分签收（M4：拆单父单状态聚合——部分子单已签收）
+     */
+    PARTIALLY_SIGNED("部分签收"),
 
     /**
      * 已签收（终态）
@@ -84,10 +104,21 @@ public enum OrderStatus {
 
     static {
         TRANSITIONS.put(TO_BE_CONFIRMED, EnumSet.of(CONFIRMED, REJECTED, CANCELLED, PRE_ORDER_ENDED));
-        TRANSITIONS.put(CONFIRMED, EnumSet.of(TRANSFERRING, CANCELLED));
+        // 已确认：既可走单仓直接转单（TRANSFERRING），也可进入寻源分仓（SPLITTING）
+        TRANSITIONS.put(CONFIRMED, EnumSet.of(TRANSFERRING, SPLITTING, CANCELLED));
+        // 寻源分仓：拆单中 → 已拆单 / 无需分仓回退到已确认
+        TRANSITIONS.put(SPLITTING, EnumSet.of(SPLITTED, CONFIRMED));
+        // 父单已拆单：等待子单状态聚合 → 部分发货 / 全部发货
+        TRANSITIONS.put(SPLITTED, EnumSet.of(PARTIALLY_SHIPPED, SHIPPED));
+        // 父单聚合：部分发货 → 部分签收 / 全部发货
+        TRANSITIONS.put(PARTIALLY_SHIPPED, EnumSet.of(PARTIALLY_SIGNED, SHIPPED));
+        // 父单聚合：部分签收 → 全部签收
+        TRANSITIONS.put(PARTIALLY_SIGNED, EnumSet.of(SIGNED));
         TRANSITIONS.put(TRANSFERRING, EnumSet.of(TRANSFERRED, CANCELLED));
         TRANSITIONS.put(TRANSFERRED, EnumSet.of(SHIPPED, CANCELLED));
-        TRANSITIONS.put(SHIPPED, EnumSet.of(SIGNED));
+        // 拆单父单聚合：全部子单已发货后，子单逐个签收 → SHIPPED → PARTIALLY_SIGNED → SIGNED
+        // （非拆单流程仅走 SHIPPED → SIGNED，PARTIALLY_SIGNED 出边由 aggregateChildStatus 专用）
+        TRANSITIONS.put(SHIPPED, EnumSet.of(PARTIALLY_SIGNED, SIGNED));
         // 终态：不可再迁移
         TRANSITIONS.put(SIGNED, EnumSet.noneOf(OrderStatus.class));
         TRANSITIONS.put(REJECTED, EnumSet.noneOf(OrderStatus.class));

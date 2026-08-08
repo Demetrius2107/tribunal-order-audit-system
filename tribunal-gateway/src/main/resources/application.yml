@@ -1,0 +1,97 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: tribunal-gateway
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_ENABLED:false}
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+    gateway:
+      # 路由规则：按路径前缀路由到后端服务（通过 Nacos 服务名 + LoadBalancer 解析）
+      routes:
+        # 认证服务
+        - id: auth-service
+          uri: lb://tribunal-order-auth-service
+          predicates:
+            - Path=/api/auth/**
+        # 客户服务
+        - id: customer-service
+          uri: lb://tribunal-order-customer-service
+          predicates:
+            - Path=/api/customers/**
+        # 订单/审单服务
+        - id: order-service
+          uri: lb://tribunal-order-service
+          predicates:
+            - Path=/api/orders/**,/api/order-reviews/**,/api/aftersales/**
+        # 库存服务
+        - id: inventory-service
+          uri: lb://tribunal-order-inventory-service
+          predicates:
+            - Path=/api/inventory/**,/api/warehouse-stock/**
+        # 账单服务
+        - id: billing-service
+          uri: lb://tribunal-order-billing-service
+          predicates:
+            - Path=/api/bills/**,/api/bill-status/**
+        # 营销服务
+        - id: marketing-service
+          uri: lb://tribunal-order-marketing-service
+          predicates:
+            - Path=/api/marketing/**,/api/promotions/**,/api/deposits/**
+        # 履约服务
+        - id: fulfillment-service
+          uri: lb://tribunal-order-fulfillment-service
+          predicates:
+            - Path=/api/fulfillments/**
+        # 通知服务
+        - id: notification-service
+          uri: lb://tribunal-order-notification-service
+          predicates:
+            - Path=/api/notifications/**
+        # 金融结算服务
+        - id: finance-settlement-service
+          uri: lb://tribunal-finance-settlement-service
+          predicates:
+            - Path=/api/settlements/**,/api/finance/**
+      # 跨域配置
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      # 无 Nacos 时的降级配置（直接用 url）
+      # 启用 Nacos 后 lb:// 前缀自动通过服务发现路由
+
+# JWT 密钥（须与 auth-service 一致）
+jwt:
+  secret: ${JWT_SECRET:tribunal-order-auth-secret-key-2026-0123456789abcdef}
+
+# 内部互信 Token
+auth:
+  internal-token: ${AUTH_INTERNAL_TOKEN:tribunal-internal-token-2026}
+
+logging:
+  level:
+    com.demetrius.tribunal.gateway: debug
+    org.springframework.cloud.gateway: info
+
+# 无 Nacos 时的直连降级地址
+gateway:
+  fallback:
+    auth-service: ${AUTH_SERVICE_URL:http://localhost:8087}
+    customer-service: ${CUSTOMER_SERVICE_URL:http://localhost:8081}
+    order-service: ${ORDER_SERVICE_URL:http://localhost:8080}
+    inventory-service: ${INVENTORY_SERVICE_URL:http://localhost:8083}
+    billing-service: ${BILLING_SERVICE_URL:http://localhost:8082}
+    marketing-service: ${MARKETING_SERVICE_URL:http://localhost:8084}
+    fulfillment-service: ${FULFILLMENT_SERVICE_URL:http://localhost:8085}
+    notification-service: ${NOTIFICATION_SERVICE_URL:http://localhost:8086}

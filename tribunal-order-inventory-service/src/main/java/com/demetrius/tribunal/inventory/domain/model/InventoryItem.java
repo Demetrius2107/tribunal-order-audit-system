@@ -90,6 +90,21 @@ public class InventoryItem {
         this.reservedQuantity = reservedQuantity.subtract(quantity);
     }
 
+    /**
+     * 退货入库（售后退货完成时调用）。
+     *
+     * <p>退货入库只增加总库存，不影响预占数量。
+     * 商品退回仓库后重新可售。</p>
+     *
+     * @param quantity 退货数量
+     */
+    public void returnStock(BigDecimal quantity) {
+        if (quantity == null || quantity.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("退货数量必须大于0");
+        }
+        this.totalQuantity = totalQuantity.add(quantity);
+    }
+
     // ---------- getters ----------
 
     public InventoryItemId getId() {

@@ -118,12 +118,26 @@ public class OrderRepositoryImpl implements OrderRepository {
         orderMapper.deleteById(id.value());
     }
 
+    @Override
+    public List<Order> findByParentOrderId(String parentOrderId) {
+        List<OrderPo> pos = orderMapper.selectList(
+                new LambdaQueryWrapper<OrderPo>().eq(OrderPo::getParentOrderId, parentOrderId));
+        return pos.stream().map(this::toDomain).collect(Collectors.toList());
+    }
+
     // ---------- 转换方法（PO ↔ 领域对象） ----------
 
     private Order toDomain(OrderPo po) {
         List<OrderSkuPo> skuPos = orderSkuMapper.findByOrderId(po.getId());
         List<OrderSku> skus = skuPos.stream()
-                .map(s -> new OrderSku(s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice()))
+                .map(s -> {
+                    OrderSku sku = new OrderSku(s.getSkuCode(), s.getSkuName(), s.getQuantity(), s.getPrice());
+                    // M4：还原寻源仓库（未寻源时为 null）
+                    if (s.getWarehouseId() != null && !s.getWarehouseId().isBlank()) {
+                        sku.assignWarehouse(s.getWarehouseId());
+                    }
+                    return sku;
+                })
                 .toList();
         List<ReturnablePackagingPo> rpPos = returnablePackagingMapper.findByOrderId(po.getId());
         List<ReturnablePackaging> rps = rpPos.stream()
@@ -149,6 +163,8 @@ public class OrderRepositoryImpl implements OrderRepository {
                 po.getShippingFee(),
                 po.getPayableAmount(),
                 po.getRejectReason(),
+                po.getParentOrderId(),
+                Boolean.TRUE.equals(po.getSplit()),
                 po.getCreateTime(),
                 po.getUpdateTime());
     }
@@ -162,6 +178,8 @@ public class OrderRepositoryImpl implements OrderRepository {
         po.setCarPooling(order.isCarPooling());
         po.setCarPoolJoined(order.isCarPoolJoined());
         po.setStatus(order.getStatus().name());
+        po.setParentOrderId(order.getParentOrderId());
+        po.setSplit(order.isSplit());
         po.setTotalAmount(order.getTotalAmount());
         po.setDiscountAmount(order.getDiscountAmount());
         po.setDiscountPoolDeduction(order.getDiscountPoolDeduction());
@@ -183,6 +201,7 @@ public class OrderRepositoryImpl implements OrderRepository {
         po.setQuantity(sku.getQuantity());
         po.setPrice(sku.getPrice());
         po.setAmount(sku.getAmount());
+        po.setWarehouseId(sku.getWarehouseId());
         po.setCreateTime(LocalDateTime.now());
         return po;
     }

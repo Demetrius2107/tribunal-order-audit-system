@@ -79,6 +79,48 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- M5: Nacos 服务发现（optional，服务声明 spring.cloud.nacos.discovery.enabled 启用） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- M5: Resilience4j 熔断/降级（optional，消费方需引入 spring-cloud-starter-circuitbreaker-resilience4j） -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- M5: Redis 分布式幂等/登录锁定/RefreshToken（optional） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- M6: 结构化日志 JSON 编码器（logstash-logback-encoder） -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
+
+        <!-- M6: Actuator 指标/健康检查端点（optional，消费方声明即生效） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- M6: Prometheus 指标注册（optional，配合 actuator 暴露 /actuator/prometheus） -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
