@@ -59,6 +59,15 @@ public class InventoryController {
     }
 
     /**
+     * 退货入库：POST /api/inventory/items/{skuCode}/return?quantity=10
+     */
+    @PostMapping("/items/{skuCode}/return")
+    public ApiResponse<InventoryItemResult> returnStock(@PathVariable String skuCode,
+                                                        @RequestParam @NotNull BigDecimal quantity) {
+        return ApiResponse.ok(InventoryItemResult.from(inventoryApplicationService.returnStock(skuCode, quantity)));
+    }
+
+    /**
      * 物料入库/库存更新：POST /api/inventory/items
      */
     @PostMapping("/items")

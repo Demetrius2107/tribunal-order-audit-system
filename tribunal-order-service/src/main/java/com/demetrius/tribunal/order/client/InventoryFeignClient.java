@@ -48,6 +48,13 @@ public interface InventoryFeignClient {
                                              @RequestParam("quantity") BigDecimal quantity);
 
     /**
+     * 退货入库：POST /api/inventory/items/{skuCode}/return?quantity=10
+     */
+    @PostMapping("/api/inventory/items/{skuCode}/return")
+    ApiResponse<InventoryItemResult> returnStock(@PathVariable("skuCode") String skuCode,
+                                                 @RequestParam("quantity") BigDecimal quantity);
+
+    /**
      * M4：仓库级库存查询（寻源分仓用）。
      *
      * <p>GET /api/inventory/warehouses/stock?skuCodes=A,B,C</p>

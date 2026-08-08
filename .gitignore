@@ -9,3 +9,5 @@ target/
 logs/
 *.log
 .atomcode/
+.codebuddy/
+.workbuddy/

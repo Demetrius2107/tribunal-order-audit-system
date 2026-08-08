@@ -28,7 +28,7 @@ spring:
         - id: order-service
           uri: lb://tribunal-order-service
           predicates:
-            - Path=/api/orders/**,/api/order-reviews/**
+            - Path=/api/orders/**,/api/order-reviews/**,/api/aftersales/**
         # 库存服务
         - id: inventory-service
           uri: lb://tribunal-order-inventory-service
