@@ -37,6 +37,9 @@ public class InventoryItem {
     /** 已预占数量 */
     private BigDecimal reservedQuantity;
 
+    /** 乐观锁版本号（并发预占/释放防超卖，仓储读写时使用） */
+    private Integer version;
+
     public InventoryItem(InventoryItemId id, String skuCode, String skuName,
                          String unit, BigDecimal totalQuantity, BigDecimal reservedQuantity) {
         if (skuCode == null || skuCode.isBlank()) {
@@ -51,6 +54,16 @@ public class InventoryItem {
         this.unit = unit;
         this.totalQuantity = totalQuantity;
         this.reservedQuantity = reservedQuantity == null ? BigDecimal.ZERO : reservedQuantity;
+        this.version = 0;
+    }
+
+    /** 还原工厂：附带乐观锁版本（仓储读取时使用）。 */
+    public static InventoryItem restore(InventoryItemId id, String skuCode, String skuName,
+                                        String unit, BigDecimal totalQuantity, BigDecimal reservedQuantity,
+                                        Integer version) {
+        InventoryItem item = new InventoryItem(id, skuCode, skuName, unit, totalQuantity, reservedQuantity);
+        item.version = version == null ? 0 : version;
+        return item;
     }
 
     /** 可售量 = 总库存 - 已预占 */
@@ -129,5 +142,9 @@ public class InventoryItem {
 
     public BigDecimal getReservedQuantity() {
         return reservedQuantity;
+    }
+
+    public Integer getVersion() {
+        return version;
     }
 }

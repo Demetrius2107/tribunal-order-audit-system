@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.Version;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -29,6 +30,10 @@ public class InventoryItemPo {
 
     /** 已预占 */
     private BigDecimal reservedQuantity;
+
+    /** 乐观锁版本号（并发预占/释放防超卖） */
+    @Version
+    private Integer version;
 
     @TableLogic
     private Integer deleted;

@@ -5,6 +5,9 @@ import com.demetrius.tribunal.inventory.domain.model.InventoryItem;
 import com.demetrius.tribunal.inventory.domain.repository.InventoryItemRepository;
 import com.demetrius.tribunal.inventory.infrastructure.mapper.InventoryFlowMapper;
 import com.demetrius.tribunal.inventory.infrastructure.model.InventoryFlowPo;
+import com.demetrius.tribunal.inventory.infrastructure.repository.InventoryItemRepositoryImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +34,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class InventoryApplicationService {
 
+    private static final Logger log = LoggerFactory.getLogger(InventoryApplicationService.class);
+
+    /** 乐观锁冲突最大重试次数（读-改-写循环） */
+    private static final int MAX_RETRY = 3;
+
     private final InventoryItemRepository inventoryItemRepository;
 
     private final InventoryFlowMapper inventoryFlowMapper;
@@ -55,9 +63,7 @@ public class InventoryApplicationService {
      */
     @Transactional
     public InventoryItem reserve(String skuCode, java.math.BigDecimal quantity) {
-        InventoryItem item = getBySkuCode(skuCode);
-        item.reserve(quantity);
-        inventoryItemRepository.save(item);
+        InventoryItem item = mutateWithRetry(skuCode, quantity, InventoryItem::reserve);
         recordFlow(skuCode, "RESERVE", quantity);
         // TODO（学习任务）：发布库存预占事件（对账/审计订阅）
         return item;
@@ -68,9 +74,7 @@ public class InventoryApplicationService {
      */
     @Transactional
     public InventoryItem release(String skuCode, java.math.BigDecimal quantity) {
-        InventoryItem item = getBySkuCode(skuCode);
-        item.release(quantity);
-        inventoryItemRepository.save(item);
+        InventoryItem item = mutateWithRetry(skuCode, quantity, InventoryItem::release);
         recordFlow(skuCode, "RELEASE", quantity);
         // TODO（学习任务）：发布库存释放事件
         return item;
@@ -81,11 +85,41 @@ public class InventoryApplicationService {
      */
     @Transactional
     public InventoryItem returnStock(String skuCode, java.math.BigDecimal quantity) {
-        InventoryItem item = getBySkuCode(skuCode);
-        item.returnStock(quantity);
-        inventoryItemRepository.save(item);
+        InventoryItem item = mutateWithRetry(skuCode, quantity, InventoryItem::returnStock);
         recordFlow(skuCode, "IN", quantity);
         return item;
+    }
+
+    /**
+     * 读-改-写 + 乐观锁冲突重试（并发超卖防护）。
+     *
+     * <p>并发预占同一 SKU 时，多个事务可能读到同一 version；写回时 {@code updateById}
+     * 带 {@code WHERE version=?}，后写者影响行数为 0 → 仓储抛乐观锁冲突 →
+     * 重新读取最新库存（含新 version）再试，最多 {@link #MAX_RETRY} 次。</p>
+     */
+    private InventoryItem mutateWithRetry(String skuCode, java.math.BigDecimal quantity,
+                                          InventoryMutation mutation) {
+        for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
+            InventoryItem item = getBySkuCode(skuCode);
+            mutation.apply(item, quantity);
+            try {
+                inventoryItemRepository.save(item);
+                return item;
+            } catch (InventoryItemRepositoryImpl.OptimisticLockConflictException e) {
+                if (attempt == MAX_RETRY) {
+                    throw new BizException("400002",
+                            "库存并发冲突，重试 " + MAX_RETRY + " 次仍失败: " + skuCode);
+                }
+                log.warn("库存乐观锁冲突，重读重试 attempt={} skuCode={}", attempt + 1, skuCode);
+            }
+        }
+        throw new IllegalStateException("不可达：重试循环已处理所有分支");
+    }
+
+    /** 库存变更动作（领域方法引用）。 */
+    @FunctionalInterface
+    private interface InventoryMutation {
+        void apply(InventoryItem item, java.math.BigDecimal quantity);
     }
 
     /**

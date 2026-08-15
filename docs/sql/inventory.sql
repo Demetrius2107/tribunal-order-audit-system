@@ -20,6 +20,7 @@ CREATE TABLE t_inventory_item (
     unit              VARCHAR(32)   NULL COMMENT '单位',
     total_quantity    DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '总库存',
     reserved_quantity DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '已预占库存',
+    version           INT           NOT NULL DEFAULT 0 COMMENT '乐观锁版本号（并发预占/释放防超卖）',
     deleted           TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0否1是',
     PRIMARY KEY (id),
     UNIQUE KEY uk_sku_code (sku_code)
