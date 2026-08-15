@@ -10,6 +10,7 @@ import com.demetrius.tribunal.order.interfaces.dto.OrderCreateRequest;
 import com.demetrius.tribunal.order.interfaces.dto.OrderModifyRequest;
 import com.demetrius.tribunal.order.interfaces.dto.OrderReviewRequest;
 import com.demetrius.tribunal.common.auth.RequirePermission;
+import com.demetrius.tribunal.common.dto.TimeoutCloseResult;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
@@ -132,6 +133,16 @@ public class OrderController {
     @RequirePermission("order:cancel")
     public OrderResult cancel(@PathVariable String orderId) {
         return orderApplicationService.cancelOrder(orderId);
+    }
+
+    /**
+     * 超时关单（task-service 定时调度调用）：POST /api/orders/timeout-close?minutes=30
+     *
+     * <p>关闭超时未确认订单（待确认超时 → 释放信用 → 终态），返回关闭数量。</p>
+     */
+    @PostMapping("/timeout-close")
+    public TimeoutCloseResult timeoutClose(@RequestParam(defaultValue = "30") int minutes) {
+        return orderApplicationService.timeoutClose(minutes);
     }
 
     /**

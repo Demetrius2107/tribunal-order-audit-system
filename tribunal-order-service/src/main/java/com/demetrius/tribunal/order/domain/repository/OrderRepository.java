@@ -2,6 +2,7 @@ package com.demetrius.tribunal.order.domain.repository;
 
 import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
+import com.demetrius.tribunal.order.domain.model.OrderStatus;
 
 import java.util.List;
 import java.util.Optional;
@@ -49,4 +50,9 @@ public interface OrderRepository {
      * M4：按父订单 ID 查询所有子单（拆单后状态聚合时使用）。
      */
     List<Order> findByParentOrderId(String parentOrderId);
+
+    /**
+     * 超时关单：查询指定状态且创建时间早于截止时间的订单（时间升序，限量）。
+     */
+    List<Order> findTimeoutOrders(OrderStatus status, java.time.LocalDateTime before, int limit);
 }

@@ -125,6 +125,17 @@ public class OrderRepositoryImpl implements OrderRepository {
         return pos.stream().map(this::toDomain).collect(Collectors.toList());
     }
 
+    @Override
+    public List<Order> findTimeoutOrders(OrderStatus status, LocalDateTime before, int limit) {
+        List<OrderPo> pos = orderMapper.selectList(
+                new LambdaQueryWrapper<OrderPo>()
+                        .eq(OrderPo::getStatus, status.name())
+                        .le(OrderPo::getCreateTime, before)
+                        .orderByAsc(OrderPo::getCreateTime)
+                        .last("LIMIT " + limit));
+        return pos.stream().map(this::toDomain).collect(Collectors.toList());
+    }
+
     // ---------- 转换方法（PO ↔ 领域对象） ----------
 
     private Order toDomain(OrderPo po) {
