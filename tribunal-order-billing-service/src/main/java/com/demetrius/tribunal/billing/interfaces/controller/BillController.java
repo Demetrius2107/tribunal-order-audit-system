@@ -1,13 +1,17 @@
 package com.demetrius.tribunal.billing.interfaces.controller;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.billing.application.dto.BillPageResult;
+import com.demetrius.tribunal.billing.application.dto.BillPaymentResult;
 import com.demetrius.tribunal.billing.application.dto.BillReceiveCommand;
 import com.demetrius.tribunal.billing.application.dto.BillResult;
 import com.demetrius.tribunal.billing.application.service.BillingApplicationService;
+import com.demetrius.tribunal.billing.application.service.BillQueryApplicationService;
 import com.demetrius.tribunal.billing.interfaces.dto.BillReceiveRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,8 +32,12 @@ public class BillController {
 
     private final BillingApplicationService billingApplicationService;
 
-    public BillController(BillingApplicationService billingApplicationService) {
+    private final BillQueryApplicationService billQueryApplicationService;
+
+    public BillController(BillingApplicationService billingApplicationService,
+                          BillQueryApplicationService billQueryApplicationService) {
         this.billingApplicationService = billingApplicationService;
+        this.billQueryApplicationService = billQueryApplicationService;
     }
 
     /**
@@ -53,6 +61,33 @@ public class BillController {
     @GetMapping("/{id}")
     public ApiResponse<BillResult> get(@PathVariable String id) {
         return ApiResponse.ok(billingApplicationService.getBill(id));
+    }
+
+    /**
+     * 账单分页列表（对外报表）：GET /api/bills?status=&customerId=&pageNum=1&pageSize=10
+     */
+    @GetMapping
+    public ApiResponse<BillPageResult> list(@RequestParam(required = false) String status,
+                                            @RequestParam(required = false) String customerId,
+                                            @RequestParam(defaultValue = "1") long pageNum,
+                                            @RequestParam(defaultValue = "10") long pageSize) {
+        return ApiResponse.ok(billQueryApplicationService.pageBills(status, customerId, pageNum, pageSize));
+    }
+
+    /**
+     * 账单收款流水明细（对外报表）：GET /api/bills/{id}/payments
+     */
+    @GetMapping("/{id}/payments")
+    public ApiResponse<List<BillPaymentResult>> payments(@PathVariable String id) {
+        return ApiResponse.ok(billQueryApplicationService.listPayments(id));
+    }
+
+    /**
+     * 按上游订单编号查询账单（对账任务用）：GET /api/bills/by-order/{sourceOrderNo}
+     */
+    @GetMapping("/by-order/{sourceOrderNo}")
+    public ApiResponse<BillResult> getBySourceOrderNo(@PathVariable String sourceOrderNo) {
+        return ApiResponse.ok(billingApplicationService.getBillBySourceOrderNo(sourceOrderNo));
     }
 
     /**

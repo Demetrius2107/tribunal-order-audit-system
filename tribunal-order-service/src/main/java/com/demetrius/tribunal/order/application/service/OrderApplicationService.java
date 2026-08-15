@@ -19,7 +19,9 @@ import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
 import com.demetrius.tribunal.order.domain.service.DepositCalculator;
+import com.demetrius.tribunal.order.domain.service.DiscountCapPolicy;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
+import com.demetrius.tribunal.order.domain.service.ShippingFeeCalculator;
 import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.infrastructure.idempotency.OrderIdempotencyGuard;
@@ -79,6 +81,10 @@ public class OrderApplicationService {
 
     private final OrderIdempotencyGuard idempotencyGuard;
 
+    private final ShippingFeeCalculator shippingFeeCalculator;
+
+    private final DiscountCapPolicy discountCapPolicy;
+
     public OrderApplicationService(OrderRepository orderRepository,
                                    ApplicationEventPublisher eventPublisher,
                                    CustomerFeignClient customerFeignClient,
@@ -86,7 +92,9 @@ public class OrderApplicationService {
                                    MarketingFeignClient marketingFeignClient,
                                    OrderReviewDomainService reviewDomainService,
                                    DepositCalculator depositCalculator,
-                                   OrderIdempotencyGuard idempotencyGuard) {
+                                   OrderIdempotencyGuard idempotencyGuard,
+                                   ShippingFeeCalculator shippingFeeCalculator,
+                                   DiscountCapPolicy discountCapPolicy) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.customerFeignClient = customerFeignClient;
@@ -95,6 +103,8 @@ public class OrderApplicationService {
         this.reviewDomainService = reviewDomainService;
         this.depositCalculator = depositCalculator;
         this.idempotencyGuard = idempotencyGuard;
+        this.shippingFeeCalculator = shippingFeeCalculator;
+        this.discountCapPolicy = discountCapPolicy;
     }
 
     /**
@@ -133,10 +143,15 @@ public class OrderApplicationService {
                 && command.discountPoolDeduction().compareTo(BigDecimal.ZERO) > 0) {
             order.applyDiscountPoolDeduction(command.discountPoolDeduction());
         }
-        // 运费（F-103：按送货地址/SKU 计算，参与金额汇总）
-        if (command.shippingFee() != null && command.shippingFee().compareTo(BigDecimal.ZERO) > 0) {
-            order.applyShippingFee(command.shippingFee());
+        // 运费（F-103：按送货地址/SKU 计算，参与金额汇总；未指定时按规则自动计算）
+        BigDecimal shippingFee = command.shippingFee();
+        if (shippingFee == null || shippingFee.compareTo(BigDecimal.ZERO) <= 0) {
+            int itemCount = order.getSkus().stream()
+                    .mapToInt(s -> s.getQuantity().intValue())
+                    .sum();
+            shippingFee = shippingFeeCalculator.calculate(itemCount, order.getTotalAmount());
         }
+        order.applyShippingFee(shippingFee);
         // 促销折扣 + 押金（F-202/F-205：调用 marketing-service 引擎计算，远程不可用时降级到本地押金）
         applyPromotionAndDeposit(order, command);
 
@@ -179,7 +194,9 @@ public class OrderApplicationService {
                 PromotionCalculateResponse data = resp.getData();
                 if (data.discountAmount() != null
                         && data.discountAmount().compareTo(BigDecimal.ZERO) > 0) {
-                    order.applyDiscount(data.discountAmount());
+                    // F-206 折扣上限：促销折扣超过商品总额×50% 时截断，防止折扣失控
+                    BigDecimal capped = discountCapPolicy.cap(order.getTotalAmount(), data.discountAmount());
+                    order.applyDiscount(capped);
                 }
                 if (data.depositAmount() != null
                         && data.depositAmount().compareTo(BigDecimal.ZERO) > 0) {

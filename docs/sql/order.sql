@@ -115,3 +115,22 @@ CREATE TABLE t_outbox_message (
     UNIQUE KEY uk_message_id (message_id),
     KEY idx_status_retry (status, next_retry_time)
 ) ENGINE = InnoDB COMMENT = '本地消息表（事务性发件箱）';
+
+-- ------------------------------------------------------------
+-- 6. 对账差异记录表（M3 收尾：对账任务发现差异时落库，支持自动修复标记）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_reconcile_record;
+CREATE TABLE t_reconcile_record (
+    id           VARCHAR(64)   NOT NULL COMMENT '主键',
+    task_code    VARCHAR(64)   NOT NULL COMMENT '任务编码（OUTBOX_RECONCILE/STATUS_RECONCILE）',
+    record_type  VARCHAR(32)   NOT NULL COMMENT '差异类型（FAILED_MSG/STALE_PENDING/BILL_MISSING/BILL_CANCELLED）',
+    ref_no       VARCHAR(64)   NOT NULL COMMENT '关联单号（messageId/orderNo）',
+    detail       VARCHAR(512)  NULL COMMENT '差异描述',
+    status       VARCHAR(16)   NOT NULL DEFAULT 'OPEN' COMMENT '处理状态（OPEN/FIXED/IGNORED）',
+    auto_fixed   TINYINT       NOT NULL DEFAULT 0 COMMENT '是否已自动修复 0否1是',
+    create_time  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发现时间',
+    fix_time     DATETIME      NULL COMMENT '修复时间',
+    PRIMARY KEY (id),
+    KEY idx_task_code (task_code),
+    KEY idx_status (status)
+) ENGINE = InnoDB COMMENT = '对账差异记录表';
