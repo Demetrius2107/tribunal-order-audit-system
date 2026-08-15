@@ -1,15 +1,18 @@
 package com.demetrius.tribunal.order.application.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.demetrius.tribunal.order.application.dto.ReconcileRecordPage;
 import com.demetrius.tribunal.order.application.dto.ReconcileRecordResult;
+import com.demetrius.tribunal.order.application.dto.ReconcileSummaryItem;
 import com.demetrius.tribunal.order.infrastructure.mapper.ReconcileRecordMapper;
 import com.demetrius.tribunal.order.infrastructure.model.ReconcileRecordPo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 对账差异记录查询应用服务（F-801/F-802：对账结果产品化）。
@@ -44,5 +47,26 @@ public class ReconcileRecordQueryApplicationService {
                 .map(ReconcileRecordResult::from)
                 .toList();
         return ReconcileRecordPage.of(page.getTotal(), pageNum, pageSize, records);
+    }
+
+    /**
+     * 对账差异汇总：按 任务/差异类型/处理状态 分组计数（对账结果产品化）。
+     */
+    @Transactional(readOnly = true)
+    public List<ReconcileSummaryItem> summary() {
+        List<Map<String, Object>> rows = reconcileRecordMapper.selectMaps(
+                new QueryWrapper<ReconcileRecordPo>()
+                        .select("task_code", "record_type", "status", "COUNT(*) AS cnt")
+                        .groupBy("task_code", "record_type", "status"));
+        return rows.stream()
+                .map(r -> new ReconcileSummaryItem(
+                        str(r.get("record_type")),
+                        str(r.get("status")),
+                        r.get("cnt") == null ? 0 : ((Number) r.get("cnt")).longValue()))
+                .toList();
+    }
+
+    private static String str(Object o) {
+        return o == null ? null : o.toString();
     }
 }
