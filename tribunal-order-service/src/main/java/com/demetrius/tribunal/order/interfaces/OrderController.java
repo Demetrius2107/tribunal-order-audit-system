@@ -73,7 +73,8 @@ public class OrderController {
                         .toList(),
                 request.discountPoolDeduction(),
                 request.shippingFee(),
-                request.depositConfigBySku());
+                request.depositConfigBySku(),
+                request.preOrderActivityNo());
         return orderApplicationService.createOrder(command);
     }
 

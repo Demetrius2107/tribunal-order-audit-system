@@ -42,7 +42,10 @@ public record OrderCreateRequest(
         BigDecimal shippingFee,
 
         /** 押金单价配置：SKU编码 → 押金单价（可选；F-205，来源 customer_sku_deposit） */
-        Map<String, BigDecimal> depositConfigBySku) {
+        Map<String, BigDecimal> depositConfigBySku,
+
+        /** 预购活动编号（可选；F-312：预购单必填，走保证金模式与独立计价口径） */
+        String preOrderActivityNo) {
 
     public OrderCreateRequest {
         if (orderType == null) {
