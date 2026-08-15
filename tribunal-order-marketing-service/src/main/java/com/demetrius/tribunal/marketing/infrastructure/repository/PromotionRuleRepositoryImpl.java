@@ -10,6 +10,7 @@ import com.demetrius.tribunal.marketing.infrastructure.model.PromotionRulePo;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 促销规则仓储实现（MyBatis-Plus）。
@@ -32,6 +33,13 @@ public class PromotionRuleRepositoryImpl implements PromotionRuleRepository {
         } else {
             mapper.updateById(po);
         }
+    }
+
+    @Override
+    public Optional<PromotionRule> findByRuleNo(String ruleNo) {
+        PromotionRulePo po = mapper.selectOne(
+                new LambdaQueryWrapper<PromotionRulePo>().eq(PromotionRulePo::getRuleNo, ruleNo));
+        return po == null ? Optional.empty() : Optional.of(toDomain(po));
     }
 
     @Override
