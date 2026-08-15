@@ -13,14 +13,19 @@ import java.util.Optional;
 /**
  * 库存物料仓储实现（MyBatis-Plus）。
  *
- * <p>TODO（学习任务）：</p>
- * <ul>
- *   <li>乐观锁：PO 加 @Version 防止并发预占超卖</li>
- *   <li>库存变动流水：预占/释放写流水表（审计 + 对账）</li>
- * </ul>
+ * <p>乐观锁（N-602/并发超卖防护）：t_inventory_item 表含 version 列，
+ * 预占/释放更新时 `updateById` 自动带 `WHERE version=?`，冲突（影响行数 0）抛
+ * {@link OptimisticLockConflictException}，由应用层读-改-写重试兜底。</p>
  */
 @Repository
 public class InventoryItemRepositoryImpl implements InventoryItemRepository {
+
+    /** 乐观锁冲突异常（version 已被其他并发事务 +1，需重读重试）。 */
+    public static class OptimisticLockConflictException extends RuntimeException {
+        public OptimisticLockConflictException(String skuCode) {
+            super("库存乐观锁冲突，请重试: " + skuCode);
+        }
+    }
 
     private final InventoryItemMapper inventoryItemMapper;
 
@@ -35,9 +40,13 @@ public class InventoryItemRepositoryImpl implements InventoryItemRepository {
                 new LambdaQueryWrapper<InventoryItemPo>().eq(InventoryItemPo::getSkuCode, item.getSkuCode()));
         if (exist == null) {
             inventoryItemMapper.insert(po);
-        } else {
-            po.setId(exist.getId());
-            inventoryItemMapper.updateById(po);
+            return;
+        }
+        po.setId(exist.getId());
+        po.setVersion(item.getVersion());
+        int updated = inventoryItemMapper.updateById(po);
+        if (updated == 0) {
+            throw new OptimisticLockConflictException(item.getSkuCode());
         }
     }
 
@@ -62,13 +71,14 @@ public class InventoryItemRepositoryImpl implements InventoryItemRepository {
     // ---------- 转换方法（PO ↔ 领域对象） ----------
 
     private InventoryItem toDomain(InventoryItemPo po) {
-        return new InventoryItem(
+        return InventoryItem.restore(
                 new InventoryItemId(po.getId()),
                 po.getSkuCode(),
                 po.getSkuName(),
                 po.getUnit(),
                 po.getTotalQuantity(),
-                po.getReservedQuantity());
+                po.getReservedQuantity(),
+                po.getVersion());
     }
 
     private InventoryItemPo toPo(InventoryItem item) {
@@ -79,6 +89,7 @@ public class InventoryItemRepositoryImpl implements InventoryItemRepository {
         po.setUnit(item.getUnit());
         po.setTotalQuantity(item.getTotalQuantity());
         po.setReservedQuantity(item.getReservedQuantity());
+        po.setVersion(item.getVersion());
         return po;
     }
 }
