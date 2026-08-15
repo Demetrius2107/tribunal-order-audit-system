@@ -62,3 +62,22 @@ CREATE TABLE t_bill_payment (
     PRIMARY KEY (id),
     KEY idx_bill (bill_id)
 ) ENGINE = InnoDB COMMENT = '收款流水表';
+
+-- ------------------------------------------------------------
+-- 4. 对账差异记录表（M3 收尾：财务对账任务发现差异时落库）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_reconcile_record;
+CREATE TABLE t_reconcile_record (
+    id           VARCHAR(64)   NOT NULL COMMENT '主键',
+    task_code    VARCHAR(64)   NOT NULL COMMENT '任务编码（PAYMENT_RECONCILE）',
+    record_type  VARCHAR(32)   NOT NULL COMMENT '差异类型（PAYMENT_MISSING/PAYMENT_AMOUNT_MISMATCH）',
+    ref_no       VARCHAR(64)   NOT NULL COMMENT '关联单号（billId）',
+    detail       VARCHAR(512)  NULL COMMENT '差异描述',
+    status       VARCHAR(16)   NOT NULL DEFAULT 'OPEN' COMMENT '处理状态（OPEN/FIXED/IGNORED）',
+    auto_fixed   TINYINT       NOT NULL DEFAULT 0 COMMENT '是否已自动修复 0否1是',
+    create_time  DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发现时间',
+    fix_time     DATETIME      NULL COMMENT '修复时间',
+    PRIMARY KEY (id),
+    KEY idx_task_code (task_code),
+    KEY idx_status (status)
+) ENGINE = InnoDB COMMENT = '对账差异记录表';

@@ -33,4 +33,11 @@ public interface OutboxMessageMapper extends BaseMapper<OutboxMessagePo> {
      */
     @Update("UPDATE t_outbox_message SET status='FAILED', version=version+1 WHERE id=#{id} AND version=#{version}")
     int markFailed(@Param("id") Long id, @Param("version") Integer version);
+
+    /**
+     * 对账补偿专用（F-802）：将 FAILED 终态消息重置为 PENDING 重新投递。
+     */
+    @Update("UPDATE t_outbox_message SET status='PENDING', retry_count=0, next_retry_time=NULL, version=version+1 " +
+            "WHERE id=#{id} AND status='FAILED'")
+    int resetFailed(@Param("id") Long id);
 }
