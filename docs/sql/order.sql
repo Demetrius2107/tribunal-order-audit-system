@@ -133,6 +133,43 @@ CREATE TABLE t_car_pool_group (
 ) ENGINE = InnoDB COMMENT = '拼车组表';
 
 -- ------------------------------------------------------------
+-- 8. 预购活动主档表（F-312：提前采购，经销商预付/保证金模式）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_pre_order_activity;
+CREATE TABLE t_pre_order_activity (
+    id             VARCHAR(64)   NOT NULL COMMENT '主键',
+    activity_no    VARCHAR(64)   NOT NULL COMMENT '预购活动编号（业务唯一键，如 PRE20260816xxxx）',
+    name           VARCHAR(128)  NOT NULL COMMENT '活动名称',
+    sku_codes      VARCHAR(512)  NULL COMMENT '参与SKU范围（逗号分隔）',
+    deposit_rate   DECIMAL(5,4)  NOT NULL DEFAULT 0.3000 COMMENT '保证金比例（如 0.3 = 30%）',
+    discount_rate  DECIMAL(5,4)  NOT NULL DEFAULT 1.0000 COMMENT '预购专享折扣率（如 0.9 = 9 折，独立计价口径）',
+    start_time     DATETIME      NOT NULL COMMENT '活动开始时间',
+    end_time       DATETIME      NOT NULL COMMENT '活动结束时间',
+    status         VARCHAR(32)   NOT NULL DEFAULT 'DRAFT' COMMENT '状态：DRAFT草稿/ACTIVE进行中/ENDED已结束/CANCELLED已取消',
+    create_time    DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time    DATETIME      NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_activity_no (activity_no)
+) ENGINE = InnoDB COMMENT = '预购活动主档表';
+
+-- ------------------------------------------------------------
+-- 9. 预购订单记录表（F-312：预购单参与活动的保证金/补缴占用）
+--    订单关闭时删除对应记录
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_pre_order_record;
+CREATE TABLE t_pre_order_record (
+    id              VARCHAR(64)   NOT NULL COMMENT '主键',
+    activity_no     VARCHAR(64)   NOT NULL COMMENT '预购活动编号',
+    order_no        VARCHAR(64)   NOT NULL COMMENT '预购订单编号',
+    total_amount    DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '商品总额',
+    deposit_amount  DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '保证金金额（总额×保证金比例）',
+    supplement_amount DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '补缴金额（总额-保证金）',
+    create_time     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_activity_order (activity_no, order_no)
+) ENGINE = InnoDB COMMENT = '预购订单记录表';
+
+-- ------------------------------------------------------------
 -- 7. 拼车组成员表（F-310：组与订单的多对多关联）
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS t_car_pool_group_member;
