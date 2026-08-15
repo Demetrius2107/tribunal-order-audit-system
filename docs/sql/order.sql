@@ -117,6 +117,35 @@ CREATE TABLE t_outbox_message (
 ) ENGINE = InnoDB COMMENT = '本地消息表（事务性发件箱）';
 
 -- ------------------------------------------------------------
+-- 6. 拼车组表（F-310：多订单合并一车运输）
+--    拼车组 = 多个拼车订单的集合；成员订单加入后不可单独关闭
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_car_pool_group;
+CREATE TABLE t_car_pool_group (
+    id           VARCHAR(64)  NOT NULL COMMENT '主键',
+    group_no     VARCHAR(64)  NOT NULL COMMENT '拼车组编号（业务唯一键，如 CP20260816xxxx）',
+    status       VARCHAR(32)  NOT NULL DEFAULT 'OPEN' COMMENT '状态：OPEN拼车中/CONFIRMED已确认/CLOSED已关闭/CANCELLED已取消',
+    member_count INT          NOT NULL DEFAULT 0 COMMENT '成员订单数',
+    create_time  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time  DATETIME     NULL COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_group_no (group_no)
+) ENGINE = InnoDB COMMENT = '拼车组表';
+
+-- ------------------------------------------------------------
+-- 7. 拼车组成员表（F-310：组与订单的多对多关联）
+-- ------------------------------------------------------------
+DROP TABLE IF EXISTS t_car_pool_group_member;
+CREATE TABLE t_car_pool_group_member (
+    id         VARCHAR(64)  NOT NULL COMMENT '主键',
+    group_id   VARCHAR(64)  NOT NULL COMMENT '拼车组ID',
+    order_no   VARCHAR(64)  NOT NULL COMMENT '成员订单编号',
+    join_time  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '加入时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_group_order (group_id, order_no)
+) ENGINE = InnoDB COMMENT = '拼车组成员表';
+
+-- ------------------------------------------------------------
 -- 6. 对账差异记录表（M3 收尾：对账任务发现差异时落库，支持自动修复标记）
 -- ------------------------------------------------------------
 DROP TABLE IF EXISTS t_reconcile_record;
