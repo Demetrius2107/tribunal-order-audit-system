@@ -27,6 +27,7 @@ import com.demetrius.tribunal.order.domain.service.DiscountCapPolicy;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
 import com.demetrius.tribunal.order.domain.service.ShippingFeeCalculator;
 import com.demetrius.tribunal.common.exception.BizException;
+import com.demetrius.tribunal.common.dto.TimeoutCloseResult;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.infrastructure.idempotency.OrderIdempotencyGuard;
 import feign.FeignException;
@@ -39,6 +40,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -285,6 +287,51 @@ public class OrderApplicationService {
             preOrderRecordRepository.deleteByOrderNo(order.getOrderNo());
         }
         return OrderResult.from(order);
+    }
+
+    /**
+     * 超时关单（用例：task-service 定时调度调用，F-801 状态对账兜底）。
+     *
+     * <p>查询超时未确认订单（status=TO_BE_CONFIRMED 且 createTime ≤ now - minutes），
+     * 逐单关闭：释放信用预占 → 状态机迁移终态 → 落库。幂等由订单状态机守卫
+     * （已审单/已关闭的订单重复关闭被非法迁移拦截）。</p>
+     *
+     * @param minutes 超时分钟数
+     * @return 关闭结果（关闭数量 + 订单编号列表）
+     */
+    @Transactional
+    public TimeoutCloseResult timeoutClose(int minutes) {
+        LocalDateTime deadline = LocalDateTime.now().minusMinutes(Math.max(minutes, 1));
+        List<Order> timeoutOrders = orderRepository.findTimeoutOrders(
+                OrderStatus.TO_BE_CONFIRMED, deadline, 100);
+        List<String> closedOrderNos = new ArrayList<>();
+        for (Order order : timeoutOrders) {
+            try {
+                releaseCreditQuietly(order);
+                order.cancel();
+                orderRepository.save(order);
+                if (order.isPreOrder()) {
+                    preOrderRecordRepository.deleteByOrderNo(order.getOrderNo());
+                }
+                closedOrderNos.add(order.getOrderNo());
+                log.info("超时关单 orderNo={} minutes={}", order.getOrderNo(), minutes);
+            } catch (Exception ex) {
+                log.warn("超时关单失败 orderNo={}, error={}", order.getOrderNo(), ex.getMessage());
+            }
+        }
+        log.info("超时关单完成: 扫描 {} 单, 关闭 {} 单", timeoutOrders.size(), closedOrderNos.size());
+        return TimeoutCloseResult.of(closedOrderNos.size(), closedOrderNos);
+    }
+
+    /** 释放信用预占（失败不阻断流程，对账任务兜底，F-403）。 */
+    private void releaseCreditQuietly(Order order) {
+        try {
+            customerFeignClient.releaseCredit(order.getCustomerId(),
+                    new CustomerFeignClient.CreditOperationRequest(order.getPayableAmount()));
+        } catch (Exception ex) {
+            log.error("释放信用失败 orderNo={}, customerId={}, amount={}",
+                    order.getOrderNo(), order.getCustomerId(), order.getPayableAmount(), ex);
+        }
     }
 
     /**

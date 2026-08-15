@@ -1,5 +1,8 @@
 package com.demetrius.tribunal.task.application.service;
 
+import com.demetrius.tribunal.common.dto.TimeoutCloseResult;
+import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.task.client.OrderTimeoutFeignClient;
 import com.demetrius.tribunal.task.domain.model.TaskLog;
 import com.demetrius.tribunal.task.domain.repository.TaskLogRepository;
 import org.slf4j.Logger;
@@ -33,21 +36,33 @@ public class TaskApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(TaskApplicationService.class);
 
+    /** 超时分钟数（默认 30 分钟未确认自动关闭） */
+    private static final int DEFAULT_TIMEOUT_MINUTES = 30;
+
     private final TaskLogRepository taskLogRepository;
 
-    public TaskApplicationService(TaskLogRepository taskLogRepository) {
+    private final OrderTimeoutFeignClient orderTimeoutFeignClient;
+
+    public TaskApplicationService(TaskLogRepository taskLogRepository,
+                                  OrderTimeoutFeignClient orderTimeoutFeignClient) {
         this.taskLogRepository = taskLogRepository;
+        this.orderTimeoutFeignClient = orderTimeoutFeignClient;
     }
 
     /**
-     * 超时关单任务（每 5 分钟执行，骨架仅记录日志）。
+     * 超时关单任务（每 5 分钟执行）。
+     *
+     * <p>调用 order-service 的超时关单接口（数据在订单侧，幂等由订单状态机保证），
+     * 关闭数量写入 TaskLog.processedCount。</p>
      */
     @Scheduled(cron = "0 */5 * * * ?")
     public void timeoutCloseOrder() {
         runTask("TIMEOUT_CLOSE_ORDER", () -> {
-            // TODO（学习任务）：扫「待确认/确认中」超时订单 → 自动关闭
-            log.info("超时关单任务执行（骨架：无实际处理）");
-            return 0;
+            ApiResponse<TimeoutCloseResult> resp =
+                    orderTimeoutFeignClient.timeoutClose(DEFAULT_TIMEOUT_MINUTES);
+            int closed = resp != null && resp.getData() != null ? resp.getData().closedCount() : 0;
+            log.info("超时关单任务完成: 关闭 {} 单（minutes={}）", closed, DEFAULT_TIMEOUT_MINUTES);
+            return closed;
         });
     }
 
