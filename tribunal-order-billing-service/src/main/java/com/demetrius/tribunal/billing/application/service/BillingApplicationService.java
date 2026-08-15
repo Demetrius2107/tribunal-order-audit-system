@@ -8,10 +8,14 @@ import com.demetrius.tribunal.billing.domain.model.BillId;
 import com.demetrius.tribunal.billing.domain.model.BillLine;
 import com.demetrius.tribunal.billing.domain.model.FinanceBill;
 import com.demetrius.tribunal.billing.domain.repository.BillRepository;
+import com.demetrius.tribunal.billing.infrastructure.mapper.BillPaymentMapper;
+import com.demetrius.tribunal.billing.infrastructure.model.BillPaymentPo;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -40,10 +44,14 @@ public class BillingApplicationService {
 
     private final ApplicationEventPublisher eventPublisher;
 
+    private final BillPaymentMapper billPaymentMapper;
+
     public BillingApplicationService(BillRepository billRepository,
-                                     ApplicationEventPublisher eventPublisher) {
+                                     ApplicationEventPublisher eventPublisher,
+                                     BillPaymentMapper billPaymentMapper) {
         this.billRepository = billRepository;
         this.eventPublisher = eventPublisher;
+        this.billPaymentMapper = billPaymentMapper;
     }
 
     /**
@@ -90,6 +98,7 @@ public class BillingApplicationService {
         BillStatusChangedEvent event = snapshot(bill);
         bill.settle();
         billRepository.save(bill);
+        recordPayment(bill);
         eventPublisher.publishEvent(new BillStatusChangedEvent(
                 event.billId(), event.sourceOrderNo(), event.from(), bill.getStatus(), bill.getUpdateTime()));
         return BillResult.from(bill);
@@ -131,6 +140,16 @@ public class BillingApplicationService {
         return BillResult.from(findRequired(billId));
     }
 
+    /**
+     * 按上游订单编号查询账单（对账任务用：F-801 状态对账）。
+     */
+    @Transactional(readOnly = true)
+    public BillResult getBillBySourceOrderNo(String sourceOrderNo) {
+        FinanceBill bill = billRepository.findBySourceOrderNo(sourceOrderNo)
+                .orElseThrow(() -> new BizException("300002", "账单不存在: " + sourceOrderNo));
+        return BillResult.from(bill);
+    }
+
     private FinanceBill findRequired(String billId) {
         return billRepository.findById(new BillId(billId))
                 .orElseThrow(() -> new BizException("300001", "账单不存在: " + billId));
@@ -147,5 +166,17 @@ public class BillingApplicationService {
      */
     private String generateId() {
         return java.util.UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * 记录收款流水（F-606：审计 + 对账）。
+     */
+    private void recordPayment(FinanceBill bill) {
+        BillPaymentPo payment = new BillPaymentPo();
+        payment.setBillId(bill.getId().value());
+        payment.setSourceOrderNo(bill.getSourceOrderNo());
+        payment.setAmount(bill.getTotalAmount());
+        payment.setPaymentTime(LocalDateTime.now());
+        billPaymentMapper.insert(payment);
     }
 }

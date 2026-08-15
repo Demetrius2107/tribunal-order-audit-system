@@ -2,6 +2,8 @@ package com.demetrius.tribunal.order.client;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
@@ -28,4 +30,10 @@ public interface BillingFeignClient {
      */
     @PostMapping("/api/bills")
     ApiResponse<BillTransferResult> transfer(@RequestBody BillTransferRequest request);
+
+    /**
+     * 按上游订单编号查询账单（对账任务用：F-801 状态对账）。
+     */
+    @GetMapping("/api/bills/by-order/{sourceOrderNo}")
+    ApiResponse<BillTransferResult> getBillBySourceOrderNo(@PathVariable String sourceOrderNo);
 }

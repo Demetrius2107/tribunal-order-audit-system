@@ -4,12 +4,14 @@ import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * tribunal-billing-service 启动类（下游 金融账单系统）
  */
 @SpringBootApplication
 @EnableFeignClients
+@EnableScheduling
 @MapperScan("com.demetrius.tribunal.billing.infrastructure.mapper")
 public class BillingServiceApplication {
 

@@ -3,6 +3,8 @@ package com.demetrius.tribunal.inventory.application.service;
 import com.demetrius.tribunal.common.exception.BizException;
 import com.demetrius.tribunal.inventory.domain.model.InventoryItem;
 import com.demetrius.tribunal.inventory.domain.repository.InventoryItemRepository;
+import com.demetrius.tribunal.inventory.infrastructure.mapper.InventoryFlowMapper;
+import com.demetrius.tribunal.inventory.infrastructure.model.InventoryFlowPo;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,8 +33,12 @@ public class InventoryApplicationService {
 
     private final InventoryItemRepository inventoryItemRepository;
 
-    public InventoryApplicationService(InventoryItemRepository inventoryItemRepository) {
+    private final InventoryFlowMapper inventoryFlowMapper;
+
+    public InventoryApplicationService(InventoryItemRepository inventoryItemRepository,
+                                       InventoryFlowMapper inventoryFlowMapper) {
         this.inventoryItemRepository = inventoryItemRepository;
+        this.inventoryFlowMapper = inventoryFlowMapper;
     }
 
     /**
@@ -52,6 +58,7 @@ public class InventoryApplicationService {
         InventoryItem item = getBySkuCode(skuCode);
         item.reserve(quantity);
         inventoryItemRepository.save(item);
+        recordFlow(skuCode, "RESERVE", quantity);
         // TODO（学习任务）：发布库存预占事件（对账/审计订阅）
         return item;
     }
@@ -64,6 +71,7 @@ public class InventoryApplicationService {
         InventoryItem item = getBySkuCode(skuCode);
         item.release(quantity);
         inventoryItemRepository.save(item);
+        recordFlow(skuCode, "RELEASE", quantity);
         // TODO（学习任务）：发布库存释放事件
         return item;
     }
@@ -76,6 +84,7 @@ public class InventoryApplicationService {
         InventoryItem item = getBySkuCode(skuCode);
         item.returnStock(quantity);
         inventoryItemRepository.save(item);
+        recordFlow(skuCode, "IN", quantity);
         return item;
     }
 
@@ -98,5 +107,18 @@ public class InventoryApplicationService {
 
     private String generateId() {
         return java.util.UUID.randomUUID().toString().replace("-", "");
+    }
+
+    /**
+     * 记录库存变动流水（F-504：审计 + 对账）。
+     *
+     * @param changeType 变动类型（IN/OUT/RESERVE/RELEASE）
+     */
+    private void recordFlow(String skuCode, String changeType, java.math.BigDecimal quantity) {
+        InventoryFlowPo flow = new InventoryFlowPo();
+        flow.setSkuCode(skuCode);
+        flow.setChangeType(changeType);
+        flow.setQuantity(quantity);
+        inventoryFlowMapper.insert(flow);
     }
 }

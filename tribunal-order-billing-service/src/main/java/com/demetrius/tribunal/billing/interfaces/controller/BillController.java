@@ -56,6 +56,14 @@ public class BillController {
     }
 
     /**
+     * 按上游订单编号查询账单（对账任务用）：GET /api/bills/by-order/{sourceOrderNo}
+     */
+    @GetMapping("/by-order/{sourceOrderNo}")
+    public ApiResponse<BillResult> getBySourceOrderNo(@PathVariable String sourceOrderNo) {
+        return ApiResponse.ok(billingApplicationService.getBillBySourceOrderNo(sourceOrderNo));
+    }
+
+    /**
      * 确认：POST /api/bills/{id}/confirm
      */
     @PostMapping("/{id}/confirm")
