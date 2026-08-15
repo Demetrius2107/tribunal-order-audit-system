@@ -12,6 +12,11 @@ public interface PromotionRuleRepository {
     void save(PromotionRule rule);
 
     /**
+     * 按规则编号查询（业务唯一键，配置化接口用）。
+     */
+    java.util.Optional<PromotionRule> findByRuleNo(String ruleNo);
+
+    /**
      * 查询全部启用中的促销规则（引擎在内存中按上下文/有效期/优先级筛选）。
      */
     List<PromotionRule> findAllActive();
