@@ -15,9 +15,13 @@ import com.demetrius.tribunal.order.domain.model.Order;
 import com.demetrius.tribunal.order.domain.model.OrderId;
 import com.demetrius.tribunal.order.domain.model.OrderSku;
 import com.demetrius.tribunal.order.domain.model.OrderStatus;
+import com.demetrius.tribunal.order.domain.model.PreOrderActivity;
+import com.demetrius.tribunal.order.domain.model.PreOrderRecord;
 import com.demetrius.tribunal.order.domain.model.ReturnablePackaging;
 import com.demetrius.tribunal.order.domain.repository.OrderPage;
 import com.demetrius.tribunal.order.domain.repository.OrderRepository;
+import com.demetrius.tribunal.order.domain.repository.PreOrderActivityRepository;
+import com.demetrius.tribunal.order.domain.repository.PreOrderRecordRepository;
 import com.demetrius.tribunal.order.domain.service.DepositCalculator;
 import com.demetrius.tribunal.order.domain.service.DiscountCapPolicy;
 import com.demetrius.tribunal.order.domain.service.OrderReviewDomainService;
@@ -85,6 +89,10 @@ public class OrderApplicationService {
 
     private final DiscountCapPolicy discountCapPolicy;
 
+    private final PreOrderActivityRepository preOrderActivityRepository;
+
+    private final PreOrderRecordRepository preOrderRecordRepository;
+
     public OrderApplicationService(OrderRepository orderRepository,
                                    ApplicationEventPublisher eventPublisher,
                                    CustomerFeignClient customerFeignClient,
@@ -94,7 +102,9 @@ public class OrderApplicationService {
                                    DepositCalculator depositCalculator,
                                    OrderIdempotencyGuard idempotencyGuard,
                                    ShippingFeeCalculator shippingFeeCalculator,
-                                   DiscountCapPolicy discountCapPolicy) {
+                                   DiscountCapPolicy discountCapPolicy,
+                                   PreOrderActivityRepository preOrderActivityRepository,
+                                   PreOrderRecordRepository preOrderRecordRepository) {
         this.orderRepository = orderRepository;
         this.eventPublisher = eventPublisher;
         this.customerFeignClient = customerFeignClient;
@@ -105,6 +115,8 @@ public class OrderApplicationService {
         this.idempotencyGuard = idempotencyGuard;
         this.shippingFeeCalculator = shippingFeeCalculator;
         this.discountCapPolicy = discountCapPolicy;
+        this.preOrderActivityRepository = preOrderActivityRepository;
+        this.preOrderRecordRepository = preOrderRecordRepository;
     }
 
     /**
@@ -138,6 +150,11 @@ public class OrderApplicationService {
                                 r.packagingType(), r.packagingName(), r.quantity(), r.unitDeposit()))
                         .toList());
 
+        // F-312 预购：走独立计价口径（预购专享折扣率 + 保证金模式），预购单跳过普通营销促销
+        if (order.isPreOrder()) {
+            applyPreOrderPricing(order, command);
+        }
+
         // 折扣池抵扣（F-204：用折扣池余额冲抵应付金额，业务文档三节）
         if (command.discountPoolDeduction() != null
                 && command.discountPoolDeduction().compareTo(BigDecimal.ZERO) > 0) {
@@ -170,6 +187,36 @@ public class OrderApplicationService {
                 order.getId(), order.getOrderNo(), order.getCustomerId(), order.getCreateTime()));
 
         return OrderResult.from(order);
+    }
+
+    /**
+     * F-312 预购计价：独立计价口径（预购专享折扣率 + 保证金模式）。
+     *
+     * <p>逐 SKU 校验活动可参与、按预购价重算单价、重算金额，
+     * 计算保证金/补缴并写预购占用记录（t_pre_order_record）。</p>
+     */
+    private void applyPreOrderPricing(Order order, OrderCreateCommand command) {
+        if (command.preOrderActivityNo() == null || command.preOrderActivityNo().isBlank()) {
+            throw new BizException("200013", "预购订单必须指定预购活动编号");
+        }
+        PreOrderActivity activity = preOrderActivityRepository.findByActivityNo(command.preOrderActivityNo())
+                .orElseThrow(() -> new BizException("200014", "预购活动不存在: " + command.preOrderActivityNo()));
+        LocalDateTime now = LocalDateTime.now();
+        for (OrderSku sku : order.getSkus()) {
+            activity.validateParticipate(sku.getSkuCode(), now);
+            sku.reprice(activity.preOrderPrice(sku.getPrice()));
+        }
+        order.recalculateAmounts();
+        BigDecimal total = order.getTotalAmount();
+        BigDecimal deposit = activity.depositAmount(total);
+        BigDecimal supplement = activity.supplementAmount(total);
+        preOrderRecordRepository.save(new PreOrderRecord(
+                java.util.UUID.randomUUID().toString().replace("-", ""),
+                command.preOrderActivityNo(),
+                order.getOrderNo(),
+                total, deposit, supplement, now));
+        log.info("预购下单: orderNo={} activityNo={} deposit={} supplement={}",
+                order.getOrderNo(), command.preOrderActivityNo(), deposit, supplement);
     }
 
     /**
@@ -233,6 +280,10 @@ public class OrderApplicationService {
 
         order.cancel();
         orderRepository.save(order);
+        // F-312 预购：订单关闭时删除预购占用记录（业务文档七节）
+        if (order.isPreOrder()) {
+            preOrderRecordRepository.deleteByOrderNo(order.getOrderNo());
+        }
         return OrderResult.from(order);
     }
 
