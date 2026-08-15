@@ -32,6 +32,11 @@ auth:
   # 服务间 Feign 调用互信令牌（各服务须一致）
   internal-token: ${AUTH_INTERNAL_TOKEN:tribunal-internal-token-2026}
 
+# 订单服务地址（超时关单 Feign 调用）
+order:
+  service:
+    url: ${ORDER_SERVICE_URL:http://localhost:8080}
+
 logging:
   level:
     com.demetrius.tribunal.task: debug
