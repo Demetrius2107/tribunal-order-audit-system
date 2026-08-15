@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.billing.infrastructure.task;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.demetrius.tribunal.billing.client.NotificationFeignClient;
 import com.demetrius.tribunal.billing.infrastructure.mapper.BillMapper;
 import com.demetrius.tribunal.billing.infrastructure.mapper.BillPaymentMapper;
 import com.demetrius.tribunal.billing.infrastructure.mapper.ReconcileRecordMapper;
@@ -37,12 +38,16 @@ public class PaymentReconcileTask {
 
     private final ReconcileRecordMapper reconcileRecordMapper;
 
+    private final NotificationFeignClient notificationFeignClient;
+
     public PaymentReconcileTask(BillMapper billMapper,
                                 BillPaymentMapper billPaymentMapper,
-                                ReconcileRecordMapper reconcileRecordMapper) {
+                                ReconcileRecordMapper reconcileRecordMapper,
+                                NotificationFeignClient notificationFeignClient) {
         this.billMapper = billMapper;
         this.billPaymentMapper = billPaymentMapper;
         this.reconcileRecordMapper = reconcileRecordMapper;
+        this.notificationFeignClient = notificationFeignClient;
     }
 
     /**
@@ -87,8 +92,21 @@ public class PaymentReconcileTask {
 
         if (mismatch > 0) {
             log.error("财务对账完成: 检查 {} 笔已结算账单, 差异/补偿 {} 笔", settledBills.size(), mismatch);
+            sendAlert("财务对账异常告警", "检查 " + settledBills.size() + " 笔已结算账单, 差异/补偿 " + mismatch + " 笔");
         } else {
             log.info("财务对账完成: 检查 {} 笔已结算账单, 全部一致", settledBills.size());
+        }
+    }
+
+    /**
+     * 差异告警：站内信通知运营（通知失败不影响对账结果）。
+     */
+    private void sendAlert(String title, String content) {
+        try {
+            notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
+                    "SITE_MESSAGE", "admin", title, content));
+        } catch (Exception e) {
+            log.warn("财务对账告警通知发送失败: title={}, error={}", title, e.getMessage());
         }
     }
 

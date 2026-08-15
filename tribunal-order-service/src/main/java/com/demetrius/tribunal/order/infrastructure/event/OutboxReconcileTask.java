@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.order.infrastructure.event;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.demetrius.tribunal.order.client.NotificationFeignClient;
 import com.demetrius.tribunal.order.infrastructure.mapper.OutboxMessageMapper;
 import com.demetrius.tribunal.order.infrastructure.mapper.ReconcileRecordMapper;
 import com.demetrius.tribunal.order.infrastructure.model.OutboxMessagePo;
@@ -35,10 +36,14 @@ public class OutboxReconcileTask {
 
     private final ReconcileRecordMapper reconcileRecordMapper;
 
+    private final NotificationFeignClient notificationFeignClient;
+
     public OutboxReconcileTask(OutboxMessageMapper outboxMessageMapper,
-                               ReconcileRecordMapper reconcileRecordMapper) {
+                               ReconcileRecordMapper reconcileRecordMapper,
+                               NotificationFeignClient notificationFeignClient) {
         this.outboxMessageMapper = outboxMessageMapper;
         this.reconcileRecordMapper = reconcileRecordMapper;
+        this.notificationFeignClient = notificationFeignClient;
     }
 
     /**
@@ -70,8 +75,22 @@ public class OutboxReconcileTask {
         if (!failed.isEmpty() || !stalePending.isEmpty()) {
             log.error("消息对账发现异常: FAILED={}, 超时PENDING(>{}分钟)={}",
                     failed.size(), STALE_MINUTES, stalePending.size());
+            sendAlert("消息对账异常告警", "FAILED=" + failed.size()
+                    + ", 超时PENDING(>" + STALE_MINUTES + "分钟)=" + stalePending.size());
         } else {
             log.info("消息对账正常: 无 FAILED / 无超时 PENDING 消息");
+        }
+    }
+
+    /**
+     * 差异告警：站内信通知运营（通知失败不影响对账结果）。
+     */
+    private void sendAlert(String title, String content) {
+        try {
+            notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
+                    "SITE_MESSAGE", "admin", title, content));
+        } catch (Exception e) {
+            log.warn("消息对账告警通知发送失败: title={}, error={}", title, e.getMessage());
         }
     }
 

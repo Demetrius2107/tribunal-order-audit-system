@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.order.client.BillTransferResult;
 import com.demetrius.tribunal.order.client.BillingFeignClient;
+import com.demetrius.tribunal.order.client.NotificationFeignClient;
 import com.demetrius.tribunal.order.infrastructure.mapper.OrderMapper;
 import com.demetrius.tribunal.order.infrastructure.mapper.ReconcileRecordMapper;
 import com.demetrius.tribunal.order.infrastructure.model.OrderPo;
@@ -40,12 +41,16 @@ public class OrderBillStatusReconcileTask {
 
     private final ReconcileRecordMapper reconcileRecordMapper;
 
+    private final NotificationFeignClient notificationFeignClient;
+
     public OrderBillStatusReconcileTask(OrderMapper orderMapper,
                                         BillingFeignClient billingFeignClient,
-                                        ReconcileRecordMapper reconcileRecordMapper) {
+                                        ReconcileRecordMapper reconcileRecordMapper,
+                                        NotificationFeignClient notificationFeignClient) {
         this.orderMapper = orderMapper;
         this.billingFeignClient = billingFeignClient;
         this.reconcileRecordMapper = reconcileRecordMapper;
+        this.notificationFeignClient = notificationFeignClient;
     }
 
     /**
@@ -78,8 +83,21 @@ public class OrderBillStatusReconcileTask {
 
         if (mismatch > 0) {
             log.error("状态对账完成: 检查 {} 单, 差异 {} 单", orders.size(), mismatch);
+            sendAlert("状态对账异常告警", "检查 " + orders.size() + " 单, 差异 " + mismatch + " 单");
         } else {
             log.info("状态对账完成: 检查 {} 单, 全部一致", orders.size());
+        }
+    }
+
+    /**
+     * 差异告警：站内信通知运营（通知失败不影响对账结果）。
+     */
+    private void sendAlert(String title, String content) {
+        try {
+            notificationFeignClient.send(new NotificationFeignClient.NotificationSendRequest(
+                    "SITE_MESSAGE", "admin", title, content));
+        } catch (Exception e) {
+            log.warn("状态对账告警通知发送失败: title={}, error={}", title, e.getMessage());
         }
     }
 
