@@ -1,8 +1,10 @@
 package com.demetrius.tribunal.inventory.interfaces.controller;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.inventory.application.dto.InventoryFlowPage;
 import com.demetrius.tribunal.inventory.application.dto.InventoryItemResult;
 import com.demetrius.tribunal.inventory.application.service.InventoryApplicationService;
+import com.demetrius.tribunal.inventory.application.service.InventoryFlowQueryApplicationService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import org.springframework.web.bind.annotation.*;
@@ -28,8 +30,12 @@ public class InventoryController {
 
     private final InventoryApplicationService inventoryApplicationService;
 
-    public InventoryController(InventoryApplicationService inventoryApplicationService) {
+    private final InventoryFlowQueryApplicationService inventoryFlowQueryApplicationService;
+
+    public InventoryController(InventoryApplicationService inventoryApplicationService,
+                               InventoryFlowQueryApplicationService inventoryFlowQueryApplicationService) {
         this.inventoryApplicationService = inventoryApplicationService;
+        this.inventoryFlowQueryApplicationService = inventoryFlowQueryApplicationService;
     }
 
     /**
@@ -74,6 +80,17 @@ public class InventoryController {
     public ApiResponse<InventoryItemResult> upsert(@RequestBody UpsertRequest request) {
         return ApiResponse.ok(InventoryItemResult.from(inventoryApplicationService.upsert(
                 request.skuCode(), request.skuName(), request.unit(), request.totalQuantity())));
+    }
+
+    /**
+     * 库存变动流水查询（对外报表）：GET /api/inventory/flows?skuCode=&changeType=&pageNum=1&pageSize=10
+     */
+    @GetMapping("/flows")
+    public ApiResponse<InventoryFlowPage> flows(@RequestParam(required = false) String skuCode,
+                                                @RequestParam(required = false) String changeType,
+                                                @RequestParam(defaultValue = "1") long pageNum,
+                                                @RequestParam(defaultValue = "10") long pageSize) {
+        return ApiResponse.ok(inventoryFlowQueryApplicationService.query(skuCode, changeType, pageNum, pageSize));
     }
 
     /**
