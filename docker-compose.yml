@@ -124,6 +124,7 @@ services:
       - "9090:9090"
     volumes:
       - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docker/prometheus-alert-rules.yml:/etc/prometheus/alert_rules/alert-rules.yml
       - tribunal-prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'

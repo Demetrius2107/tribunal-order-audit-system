@@ -10,6 +10,10 @@ global:
   scrape_interval: 15s          # 默认采集间隔
   evaluation_interval: 15s      # 规则评估间隔
 
+# 告警规则（M6 告警闭环：服务可用性/错误率/响应时间/JVM/消费积压）
+rule_files:
+  - 'alert_rules/*.yml'
+
 scrape_configs:
   # 订单/审单服务
   - job_name: 'tribunal-order-service'
