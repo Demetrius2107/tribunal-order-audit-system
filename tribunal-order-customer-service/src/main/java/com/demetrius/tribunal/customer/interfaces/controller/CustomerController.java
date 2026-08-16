@@ -56,6 +56,15 @@ public class CustomerController {
     }
 
     /**
+     * 促销返还入折扣池（F-203）：POST /api/customers/{id}/discount-pool/add
+     */
+    @PostMapping("/{id}/discount-pool/add")
+    public ApiResponse<CustomerCreditDto> addDiscountPool(@PathVariable String id,
+                                                          @RequestBody CreditOperationRequest request) {
+        return ApiResponse.ok(customerApplicationService.addDiscountPool(id, request.amount()));
+    }
+
+    /**
      * 信用操作请求体。
      */
     public record CreditOperationRequest(

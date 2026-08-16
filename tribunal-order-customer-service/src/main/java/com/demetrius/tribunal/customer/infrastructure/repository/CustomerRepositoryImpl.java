@@ -43,6 +43,7 @@ public class CustomerRepositoryImpl implements CustomerRepository {
         po.setName(customer.getName());
         po.setCreditLimit(customer.getCreditLimit().limit());
         po.setCreditUsed(customer.getCreditLimit().used());
+        po.setDiscountPoolBalance(customer.getDiscountPoolBalance());
         // 存在则更新、不存在则插入（信用占用/释放是更新已存在客户）
         if (customerMapper.selectById(customer.getId()) == null) {
             customerMapper.insert(po);
@@ -53,6 +54,7 @@ public class CustomerRepositoryImpl implements CustomerRepository {
 
     private Customer toDomain(CustomerPo po) {
         CreditLimit credit = new CreditLimit(po.getCreditLimit(), po.getCreditUsed());
-        return new Customer(po.getId(), po.getCustomerCode(), po.getName(), credit);
+        return new Customer(po.getId(), po.getCustomerCode(), po.getName(), credit,
+                po.getDiscountPoolBalance());
     }
 }

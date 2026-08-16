@@ -59,6 +59,17 @@ public class CustomerApplicationService {
         return toDto(released);
     }
 
+    /**
+     * 促销返还入折扣池（F-203：营销活动返还 → 增加客户折扣池余额）。
+     */
+    @Transactional
+    public CustomerCreditDto addDiscountPool(String customerId, BigDecimal amount) {
+        Customer customer = findCustomer(customerId);
+        Customer credited = customer.addDiscountPool(amount);
+        customerRepository.save(credited);
+        return toDto(credited);
+    }
+
     private Customer findCustomer(String customerId) {
         return customerRepository.findById(customerId)
                 .orElseThrow(() -> new BizException("100001", "客户不存在: " + customerId));
@@ -69,6 +80,7 @@ public class CustomerApplicationService {
                 customer.getId(),
                 customer.getCustomerCode(),
                 customer.getCreditLimit().limit(),
-                customer.getCreditLimit().used());
+                customer.getCreditLimit().used(),
+                customer.getDiscountPoolBalance());
     }
 }
