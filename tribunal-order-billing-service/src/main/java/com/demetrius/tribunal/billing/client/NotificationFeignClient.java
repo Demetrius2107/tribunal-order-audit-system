@@ -11,9 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody;
  * <p>对应需求：F-701~F-703（站内信/邮件/短信）。</p>
  *
  * <p>用途：对账发现差异时发送站内信告警（对账结果产品化）。</p>
+ *
+ * <p>M5 熔断/降级：通知为非关键路径，fallback 静默降级（仅记日志，不阻断对账主流程）。</p>
  */
 @FeignClient(name = "tribunal-order-notification-service",
-        url = "${notification.service.url:http://localhost:8086}")
+        fallbackFactory = NotificationFeignFallbackFactory.class)
 public interface NotificationFeignClient {
 
     /**

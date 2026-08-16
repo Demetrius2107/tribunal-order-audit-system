@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: tribunal-order-billing-service
+  # M5: Nacos 服务发现（无 Nacos 环境时设为 false；启用后 Feign 服务名路由）
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_ENABLED:false}
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        namespace: ${NACOS_NAMESPACE:public}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 独立库：tribunal_billing（金融账单处理模块独立数据库）
@@ -26,6 +35,33 @@ spring:
 order:
   service:
     url: ${ORDER_SERVICE_URL:http://localhost:8080}
+
+# M5: Feign + Resilience4j 整合（熔断器按 Feign client name 分组）
+feign:
+  circuitbreaker:
+    enabled: true
+
+# M5: Resilience4j 熔断/降级配置
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - feign.FeignException
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+    instances:
+      tribunal-order-service:
+        base-config: default
+      tribunal-order-notification-service:
+        base-config: default
 
 mybatis-plus:
   configuration:
