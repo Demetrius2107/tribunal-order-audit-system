@@ -24,6 +24,26 @@
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
         </dependency>
+        <!-- M5: Nacos Config 配置中心（默认关闭，NACOS_CONFIG_ENABLED=true 时启用） -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+        <!-- M5: 网关限流 RequestRateLimiter 需要 Redis（令牌桶） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- M5: 网关熔断 CircuitBreaker filter（WebFlux 专用 reactive 版 Resilience4j） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+        </dependency>
+        <!-- M5: Resilience4j 需要的 AOP（reactive 场景亦需） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
         <!-- 共享内核（ApiResponse/JWT 解析/内部 Token） -->
         <dependency>
             <groupId>com.demetrius</groupId>
