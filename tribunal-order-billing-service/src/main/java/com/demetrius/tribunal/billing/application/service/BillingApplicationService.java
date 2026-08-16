@@ -10,6 +10,8 @@ import com.demetrius.tribunal.billing.domain.model.FinanceBill;
 import com.demetrius.tribunal.billing.domain.repository.BillRepository;
 import com.demetrius.tribunal.billing.infrastructure.mapper.BillPaymentMapper;
 import com.demetrius.tribunal.billing.infrastructure.model.BillPaymentPo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +42,8 @@ import java.util.List;
 @Service
 public class BillingApplicationService {
 
+    private static final Logger log = LoggerFactory.getLogger(BillingApplicationService.class);
+
     private final BillRepository billRepository;
 
     private final ApplicationEventPublisher eventPublisher;
@@ -56,10 +60,19 @@ public class BillingApplicationService {
 
     /**
      * 接收订单服务转单，生成账单（初始状态 = 已生成）。
+     *
+     * <p>幂等：按 sourceOrderNo 查重，重复转单（含对账自动补账单重发）直接返回已有账单，
+     * 不重复生成（N-205 / 异步补偿闭环前提）。</p>
      */
     @Transactional
     public BillResult generateBill(BillReceiveCommand command) {
-        // TODO（学习任务）：按 sourceOrderNo 幂等查重，重复转单直接返回已有账单
+        // 幂等查重：同一上游订单号已生成账单则直接返回（对账自动修复重发场景）
+        FinanceBill exist = billRepository.findBySourceOrderNo(command.sourceOrderNo()).orElse(null);
+        if (exist != null) {
+            log.info("转单幂等命中: sourceOrderNo={} 返回已有账单 billId={}",
+                    command.sourceOrderNo(), exist.getId().value());
+            return BillResult.from(exist);
+        }
 
         List<BillLine> lines = command.lines().stream()
                 .map(l -> new BillLine(l.skuCode(), l.skuName(), l.quantity(), l.price()))
