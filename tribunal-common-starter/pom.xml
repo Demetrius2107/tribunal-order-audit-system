@@ -79,11 +79,16 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- M5: Nacos 服务发现（optional，服务声明 spring.cloud.nacos.discovery.enabled 启用） -->
+        <!-- M5: Nacos 服务发现（传递到所有服务，各服务 application.yml 配置
+             spring.cloud.nacos.discovery.enabled 启用；无 Nacos 环境默认关闭不注册） -->
         <dependency>
             <groupId>com.alibaba.cloud</groupId>
             <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
-            <optional>true</optional>
+        </dependency>
+        <!-- M5: LoadBalancer（Feign 服务名路由必需：@FeignClient 去掉 url 后按 name 走负载均衡） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-loadbalancer</artifactId>
         </dependency>
 
         <!-- M5: Resilience4j 熔断/降级（optional，消费方需引入 spring-cloud-starter-circuitbreaker-resilience4j） -->

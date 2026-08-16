@@ -16,7 +16,6 @@ import java.math.BigDecimal;
  * <p>对应需求：F-102（价格体系）、F-202（促销引擎）、F-205（押金引擎）。</p>
  */
 @FeignClient(name = "tribunal-order-marketing-service",
-        url = "${marketing.service.url:http://localhost:8084}",
         fallbackFactory = MarketingFeignFallbackFactory.class)
 public interface MarketingFeignClient {
 

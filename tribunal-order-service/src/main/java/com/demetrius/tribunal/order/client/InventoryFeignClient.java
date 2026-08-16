@@ -1,6 +1,7 @@
 package com.demetrius.tribunal.order.client;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
+import com.demetrius.tribunal.order.client.fallback.InventoryFeignFallbackFactory;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -17,14 +18,11 @@ import java.util.List;
  *
  * <p>用途：下单/审单时校验可售量并预占库存；取消/签收时释放。</p>
  *
- * <p>TODO（学习任务）：</p>
- * <ul>
- *   <li>预占失败处理：库存不足拒绝/降级（是否允许无库存下单由业务规则决定）</li>
- *   <li>接入 Nacos 后去掉 url 直连</li>
- * </ul>
+ * <p>M5 熔断/降级：库存为强一致操作，fallback 不静默降级成功，
+ * 统一抛 {@link com.demetrius.tribunal.common.exception.BizException} 走补偿/对账链路。</p>
  */
 @FeignClient(name = "tribunal-order-inventory-service",
-        url = "${inventory.service.url:http://localhost:8083}")
+        fallbackFactory = InventoryFeignFallbackFactory.class)
 public interface InventoryFeignClient {
 
     /**

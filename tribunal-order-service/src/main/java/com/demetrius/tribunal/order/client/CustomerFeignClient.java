@@ -25,7 +25,6 @@ import java.math.BigDecimal;
  * </ul>
  */
 @FeignClient(name = "tribunal-order-customer-service",
-        url = "${customer.service.url:http://localhost:8081}",
         fallbackFactory = CustomerFeignFallbackFactory.class)
 public interface CustomerFeignClient {
 

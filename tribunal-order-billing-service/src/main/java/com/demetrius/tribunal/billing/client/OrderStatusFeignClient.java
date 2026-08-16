@@ -11,14 +11,11 @@ import org.springframework.web.bind.annotation.RequestBody;
  *
  * <p>用途：金融账单状态变更后，回传 订单服务 驱动订单状态机。</p>
  *
- * <p>TODO（学习任务）：</p>
- * <ul>
- *   <li>回传失败重试（记录待重传表，定时任务补偿）</li>
- *   <li>接入 Nacos 后去掉 url 直连</li>
- * </ul>
+ * <p>M5 熔断/降级：状态回传为订单状态机推进关键链路，fallback 不静默降级，
+ * 抛 {@link com.demetrius.tribunal.common.exception.BizException} 由 Kafka 异步链路/对账兜底。</p>
  */
 @FeignClient(name = "tribunal-order-service",
-        url = "${order.service.url:http://localhost:8080}")
+        fallbackFactory = OrderStatusFeignFallbackFactory.class)
 public interface OrderStatusFeignClient {
 
     /**

@@ -4,6 +4,15 @@ server:
 spring:
   application:
     name: tribunal-order-marketing-service
+  # M5: Nacos 服务发现（无 Nacos 环境时设为 false；启用后 Feign 服务名路由）
+  cloud:
+    nacos:
+      discovery:
+        enabled: ${NACOS_ENABLED:false}
+        server-addr: ${NACOS_ADDR:localhost:8848}
+        username: ${NACOS_USERNAME:nacos}
+        password: ${NACOS_PASSWORD:nacos}
+        namespace: ${NACOS_NAMESPACE:public}
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     # 独立库：tribunal_marketing（营销价格域独立数据库）

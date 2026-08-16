@@ -38,6 +38,16 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
+        <!-- M5: Resilience4j 熔断/降级（配合 Feign 使用） -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+        </dependency>
+        <!-- M5: Resilience4j 需要的 AOP -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
         <!-- M3 异步化：消费 OrderApproved 事件生成账单 -->
         <dependency>
             <groupId>org.springframework.kafka</groupId>

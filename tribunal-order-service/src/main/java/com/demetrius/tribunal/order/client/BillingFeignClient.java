@@ -21,8 +21,7 @@ import org.springframework.web.bind.annotation.RequestBody;
  *   <li>接入 Nacos 后去掉 url 直连，用服务名路由</li>
  * </ul>
  */
-@FeignClient(name = "tribunal-order-billing-service",
-        url = "${billing.service.url:http://localhost:8082}")
+@FeignClient(name = "tribunal-order-billing-service")
 public interface BillingFeignClient {
 
     /**
