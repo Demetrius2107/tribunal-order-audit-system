@@ -94,6 +94,17 @@ public class InventoryController {
     }
 
     /**
+     * SKU 分页查询（F-101）：GET /api/inventory/items?skuCode=&skuName=&pageNum=1&pageSize=10
+     */
+    @GetMapping("/items")
+    public ApiResponse<Object> list(@RequestParam(required = false) String skuCode,
+                                    @RequestParam(required = false) String skuName,
+                                    @RequestParam(defaultValue = "1") long pageNum,
+                                    @RequestParam(defaultValue = "10") long pageSize) {
+        return ApiResponse.ok(inventoryApplicationService.listSkus(skuCode, skuName, pageNum, pageSize));
+    }
+
+    /**
      * 心跳接口（运维探活）。
      */
     @GetMapping("/heartbeat")

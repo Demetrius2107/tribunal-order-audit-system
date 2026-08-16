@@ -8,6 +8,7 @@ import com.demetrius.tribunal.inventory.infrastructure.mapper.InventoryItemMappe
 import com.demetrius.tribunal.inventory.infrastructure.model.InventoryItemPo;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -61,6 +62,21 @@ public class InventoryItemRepositoryImpl implements InventoryItemRepository {
         InventoryItemPo po = inventoryItemMapper.selectOne(
                 new LambdaQueryWrapper<InventoryItemPo>().eq(InventoryItemPo::getSkuCode, skuCode));
         return po == null ? Optional.empty() : Optional.of(toDomain(po));
+    }
+
+    @Override
+    public List<Object> findPage(String skuCode, String skuName, long pageNum, long pageSize) {
+        LambdaQueryWrapper<InventoryItemPo> wrapper = new LambdaQueryWrapper<>();
+        wrapper.like(skuCode != null && !skuCode.isBlank(), InventoryItemPo::getSkuCode, skuCode)
+               .like(skuName != null && !skuName.isBlank(), InventoryItemPo::getSkuName, skuName)
+               .orderByAsc(InventoryItemPo::getSkuCode);
+
+        com.baomidou.mybatisplus.extension.plugins.pagination.Page<InventoryItemPo> page =
+                inventoryItemMapper.selectPage(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(pageNum, pageSize), wrapper);
+        List<InventoryItem> items = page.getRecords().stream()
+                .map(this::toDomain)
+                .toList();
+        return List.of(page.getTotal(), items);
     }
 
     @Override
