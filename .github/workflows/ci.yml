@@ -20,7 +20,8 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build and test with Maven
+      # 质量门槛①：mvn verify 内嵌 JaCoCo 覆盖率门禁（LINE≥0.30 / BRANCH≥0.20，父 POM 统一配置）
+      - name: Build, test and coverage gate with Maven
         run: mvn -B -ntp verify --file pom.xml
 
       - name: Upload test reports
@@ -29,4 +30,37 @@ jobs:
         with:
           name: surefire-reports
           path: '**/target/surefire-reports/**'
+          retention-days: 7
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports
+          path: '**/target/site/jacoco/**'
+          retention-days: 7
+
+  # 质量门槛②：OWASP 依赖漏洞扫描（独立 job，只挡 CVSS≥8 高危）
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run OWASP dependency check
+        run: mvn -B -ntp org.owasp:dependency-check-maven:check --file pom.xml -DfailBuildOnCVSS=8
+
+      - name: Upload dependency-check report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-reports
+          path: '**/target/dependency-check-report.html'
           retention-days: 7
