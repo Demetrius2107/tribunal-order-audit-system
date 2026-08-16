@@ -18,7 +18,13 @@ public record CustomerCreditDto(
         String customerId,
         String customerCode,
         BigDecimal creditLimit,
-        BigDecimal creditUsed) {
+        BigDecimal creditUsed,
+        BigDecimal discountPoolBalance) {
+
+    public CustomerCreditDto(String customerId, String customerCode,
+                             BigDecimal creditLimit, BigDecimal creditUsed) {
+        this(customerId, customerCode, creditLimit, creditUsed, BigDecimal.ZERO);
+    }
 
     /** 可用信用 = 总额度 - 已占用 */
     public BigDecimal available() {

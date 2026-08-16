@@ -72,6 +72,18 @@ class InventoryApplicationServiceConcurrencyTest {
             return current == null ? java.util.Optional.empty() : java.util.Optional.of(copyOf(current));
         }
 
+        @Override
+        public java.util.List<Object> findPage(String skuCode, String skuName,
+                                               long pageNum, long pageSize) {
+            java.util.List<InventoryItem> items = store.values().stream()
+                    .filter(i -> skuCode == null || skuCode.isBlank()
+                            || i.getSkuCode().contains(skuCode))
+                    .filter(i -> skuName == null || skuName.isBlank()
+                            || (i.getSkuName() != null && i.getSkuName().contains(skuName)))
+                    .toList();
+            return java.util.List.of((long) items.size(), items);
+        }
+
         /** 深拷贝：模拟 DB select 返回快照，避免应用层就地修改污染 store。 */
         private InventoryItem copyOf(InventoryItem item) {
             return InventoryItem.restore(

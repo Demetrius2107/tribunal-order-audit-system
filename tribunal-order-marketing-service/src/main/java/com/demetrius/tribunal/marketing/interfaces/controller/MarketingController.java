@@ -2,6 +2,7 @@ package com.demetrius.tribunal.marketing.interfaces.controller;
 
 import com.demetrius.tribunal.common.response.ApiResponse;
 import com.demetrius.tribunal.marketing.application.dto.PriceQuoteResult;
+import com.demetrius.tribunal.marketing.application.dto.PriceRuleResult;
 import com.demetrius.tribunal.marketing.application.dto.PromotionCalculateRequest;
 import com.demetrius.tribunal.marketing.application.dto.PromotionCalculateResponse;
 import com.demetrius.tribunal.marketing.application.dto.PromotionRuleResult;
@@ -51,6 +52,26 @@ public class MarketingController {
         BigDecimal price = marketingApplicationService.quotePrice(
                 skuCode, customerCode, customerGroupId, areaCode);
         return ApiResponse.ok(new PriceQuoteResult(skuCode, price, "CNY"));
+    }
+
+    /**
+     * 配置价格规则（F-102 配置化）：POST /api/marketing/price
+     * <p>priceLevel: CUSTOMER（客户价）/ CUSTOMER_GROUP（客户组价）/ AREA（区域价）</p>
+     */
+    @PostMapping("/price")
+    public ApiResponse<PriceRuleResult> upsertPrice(@Valid @RequestBody UpsertPriceRequest request) {
+        return ApiResponse.ok(PriceRuleResult.from(marketingApplicationService.upsertPrice(
+                request.skuCode(), request.priceLevel(), request.priceTarget(),
+                request.price(), request.currency())));
+    }
+
+    /** 配置价格规则请求体。 */
+    public record UpsertPriceRequest(
+            @NotBlank String skuCode,
+            @NotBlank String priceLevel,
+            @NotBlank String priceTarget,
+            @NotNull BigDecimal price,
+            String currency) {
     }
 
     // ===== 促销 + 押金联合计算（F-202 + F-205）=====

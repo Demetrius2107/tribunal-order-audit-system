@@ -28,6 +28,9 @@ public class CustomerPo {
     /** 已占用信用 */
     private BigDecimal creditUsed;
 
+    /** 折扣池余额（促销返还，可抵扣应付，F-203） */
+    private BigDecimal discountPoolBalance;
+
     @TableLogic
     private Integer deleted;
 }

@@ -19,6 +19,7 @@ CREATE TABLE t_customer (
     name          VARCHAR(128)  NOT NULL COMMENT '客户名称',
     credit_limit  DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '信用总额度',
     credit_used   DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '已占用信用',
+    discount_pool_balance DECIMAL(18,2) NOT NULL DEFAULT 0 COMMENT '折扣池余额（促销返还，可抵扣应付，F-203）',
     deleted       TINYINT       NOT NULL DEFAULT 0 COMMENT '逻辑删除 0否1是',
     PRIMARY KEY (id),
     UNIQUE KEY uk_customer_code (customer_code)

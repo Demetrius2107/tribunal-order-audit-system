@@ -11,6 +11,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 /**
  * 库存物料应用服务（用例编排层）。
  *
@@ -56,6 +58,16 @@ public class InventoryApplicationService {
     public InventoryItem getBySkuCode(String skuCode) {
         return inventoryItemRepository.findBySkuCode(skuCode)
                 .orElseThrow(() -> new BizException("400001", "物料不存在: " + skuCode));
+    }
+
+    /**
+     * SKU 分页查询（F-101：按编码/名称模糊检索）。
+     *
+     * @return [总数, 本页列表]
+     */
+    @Transactional(readOnly = true)
+    public List<Object> listSkus(String skuCode, String skuName, long pageNum, long pageSize) {
+        return inventoryItemRepository.findPage(skuCode, skuName, pageNum, pageSize);
     }
 
     /**
